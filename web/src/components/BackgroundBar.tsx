@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { UrgencyLevel, getUrgencyColor } from '../types/timer';
+import '../animations.css';
 
 interface BackgroundBarProps {
   urgencyLevel: UrgencyLevel;
@@ -7,37 +8,14 @@ interface BackgroundBarProps {
 }
 
 const BackgroundBar: React.FC<BackgroundBarProps> = ({ urgencyLevel, isPulsing = false }) => {
-  const [opacity, setOpacity] = useState(1);
-
-  useEffect(() => {
-    if (!isPulsing || urgencyLevel !== 'critical') {
-      setOpacity(1);
-      return;
-    }
-
-    let animationFrameId: number;
-    let startTime = Date.now();
-
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const cycle = 500;
-      const progress = (elapsed % cycle) / cycle;
-      const pulse = 0.4 + 0.6 * Math.sin(progress * Math.PI);
-      setOpacity(pulse);
-      animationFrameId = requestAnimationFrame(animate);
-    };
-
-    animationFrameId = requestAnimationFrame(animate);
-
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [isPulsing, urgencyLevel]);
-
   const baseColor = getUrgencyColor(urgencyLevel);
   const rgbColor = hexToRgb(baseColor);
-  const backgroundColor = `rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, ${opacity * 0.3})`;
+  const opacity = isPulsing && urgencyLevel === 'critical' ? 0.5 : 0.3;
+  const backgroundColor = `rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, ${opacity})`;
 
   return (
     <div
+      className={isPulsing && urgencyLevel === 'critical' ? 'pulse-critical' : 'face-transition'}
       style={{
         position: 'fixed',
         top: 0,
@@ -45,7 +23,6 @@ const BackgroundBar: React.FC<BackgroundBarProps> = ({ urgencyLevel, isPulsing =
         width: '100%',
         height: '100%',
         backgroundColor,
-        transition: isPulsing ? 'none' : 'background-color 500ms ease-in-out',
         pointerEvents: 'none',
         zIndex: -1,
       }}

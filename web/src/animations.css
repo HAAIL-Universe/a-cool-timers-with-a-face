@@ -1,0 +1,26 @@
+@keyframes criticalPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes bgTransition {
+  0% {
+    background-color: inherit;
+  }
+  100% {
+    background-color: inherit;
+  }
+}
+
+.pulse-critical {
+  animation: criticalPulse 0.5s ease-in-out infinite;
+}
+
+.face-transition {
+  opacity: 1;
+  transition: opacity 200ms ease-in-out;
+}

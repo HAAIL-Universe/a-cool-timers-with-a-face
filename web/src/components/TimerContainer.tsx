@@ -1,6 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import TimerDisplay from './TimerDisplay';
 import { StartPauseButton } from './StartPauseButton';
+import DurationSelector from './DurationSelector';
+import { useKeyboard } from '../hooks/useKeyboard';
+import BackgroundBar from './BackgroundBar';
+import FacialAvatar from './FacialAvatar';
 
 type UrgencyLevel = 'low' | 'medium' | 'high' | 'critical';
 type FacialExpression = 'calm' | 'concerned' | 'worried' | 'panicked';
@@ -16,55 +20,15 @@ interface TimerContainerProps {
   isRunning: boolean;
   onReset: () => void;
   onStartPause: () => void;
+  onDurationSelect: (d: number) => void;
+  selectedDuration: number;
   isLoading: boolean;
-  duration: number;
-}
-
-interface FacialAvatarProps {
-  expression: FacialExpression;
-  urgencyLevel: UrgencyLevel;
-  isPulsing: boolean;
-}
-
-interface BackgroundBarProps {
-  urgencyLevel: UrgencyLevel;
-  isPulsing: boolean;
 }
 
 interface ResetButtonProps {
   onClick: () => void;
   disabled: boolean;
 }
-
-const BackgroundBar: React.FC<BackgroundBarProps> = ({
-  urgencyLevel,
-  isPulsing,
-}) => {
-  return (
-    <div
-      className={`background-bar urgency-${urgencyLevel} ${
-        isPulsing ? 'pulsing' : ''
-      }`}
-      role="presentation"
-    />
-  );
-};
-
-const FacialAvatar: React.FC<FacialAvatarProps> = ({
-  expression,
-  urgencyLevel,
-  isPulsing,
-}) => {
-  return (
-    <div
-      className={`facial-avatar expression-${expression} urgency-${urgencyLevel} ${
-        isPulsing ? 'pulsing' : ''
-      }`}
-      role="img"
-      aria-label={`Avatar with ${expression} expression`}
-    />
-  );
-};
 
 const ResetButton: React.FC<ResetButtonProps> = ({ onClick, disabled }) => {
   return (
@@ -84,14 +48,21 @@ export default function TimerContainer({
   isRunning,
   onReset,
   onStartPause,
+  onDurationSelect,
+  selectedDuration,
   isLoading,
-  duration,
 }: TimerContainerProps): JSX.Element {
   const urgencyLevel: UrgencyLevel = timerState?.urgencyLevel ?? 'low';
   const facialExpression: FacialExpression =
     timerState?.facialExpression ?? 'calm';
   const isPulsing = urgencyLevel === 'critical' && isRunning;
   const timeRemaining = timerState?.remainingTime ?? 0;
+
+  useKeyboard({
+    onSpace: onStartPause,
+    onR: onReset,
+    enabled: !isLoading,
+  });
 
   return (
     <div className="timer-container">
@@ -110,6 +81,14 @@ export default function TimerContainer({
           <TimerDisplay
             timeRemaining={timeRemaining}
             urgencyLevel={urgencyLevel}
+          />
+        </div>
+
+        <div className="duration-section">
+          <DurationSelector
+            selectedDuration={selectedDuration}
+            onSelect={onDurationSelect}
+            disabled={isRunning || isLoading}
           />
         </div>
 
