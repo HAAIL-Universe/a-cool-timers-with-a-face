@@ -1,113 +1,147 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  getTimerState,
-  pauseTimer,
-  resumeTimer,
-  resetTimer,
-  configureTimer,
-} from '../api';
-import { TimerState, UrgencyState, FacialState } from '../types';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { TimerState, FacialState } from '../types';
+import { getTimerState, resetTimer, pauseTimer, resumeTimer, configureTimer } from '../api';
 
-const STORAGE_KEY = 'timer_duration';
-const POLL_INTERVAL = 1000;
-
-export function useTimer() {
-  const [timerState, setTimerState] = useState<TimerState | null>(null);
-  const [urgencyState, setUrgencyState] = useState<UrgencyState | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+export function useTimer(initialDuration: number = 60) {
+  const [timerState, setTimerState] = useState<TimerState>({
+    seconds_remaining: initialDuration,
+    total_seconds: initialDuration,
+    is_running: false,
+    is_expired: false,
+    status: 'idle',
+  });
+  
+  const [facialState, setFacialState] = useState<FacialState>('neutral');
   const [error, setError] = useState<string | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const facialState: FacialState = urgencyState?.facial_expression ?? 'calm';
+  const calculateFacialState = useCallback((state: TimerState): FacialState => {
+    if (state.is_expired) {
+      return 'defeated';
+    }
+    
+    if (!state.is_running) {
+      return 'neutral';
+    }
 
-  const fetchState = useCallback(async () => {
-    try {
-      setError(null);
-      const timer = await getTimerState();
-      setTimerState(timer);
-      setUrgencyState(timer?.urgency ?? null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+    const percentageRemaining = (state.seconds_remaining / state.total_seconds) * 100;
+
+    if (percentageRemaining > 50) {
+      return 'neutral';
+    } else if (percentageRemaining > 25) {
+      return 'anxious';
+    } else {
+      return 'panicked';
     }
   }, []);
 
-  useEffect(() => {
-    const initializeDuration = async () => {
-      setIsLoading(true);
-      await fetchState();
-      setIsLoading(false);
-    };
-    initializeDuration();
-  }, [fetchState]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchState();
-    }, POLL_INTERVAL);
-
-    return () => clearInterval(interval);
-  }, [fetchState]);
-
-  const configure = useCallback(
-    async (duration: number) => {
-      try {
-        setError(null);
-        setIsLoading(true);
-        setTimerState(prev => prev ? { ...prev, duration } : null);
-        localStorage.setItem(STORAGE_KEY, String(duration));
-        await configureTimer(duration);
-        await fetchState();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to configure timer');
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [fetchState]
-  );
-
-  const reset = useCallback(async () => {
+  const fetchTimerState = useCallback(async () => {
     try {
+      const state = await getTimerState();
+      setTimerState(state);
+      setFacialState(calculateFacialState(state));
       setError(null);
-      setIsLoading(true);
-      setTimerState(prev => prev ? { ...prev, elapsed: 0 } : null);
-      await resetTimer();
-      await fetchState();
+
+      if (state.is_expired && pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch timer state');
+    }
+  }, [calculateFacialState]);
+
+  const handleReset = useCallback(async () => {
+    try {
+      const state = await resetTimer();
+      setTimerState(state);
+      setFacialState(calculateFacialState(state));
+      setError(null);
+
+      if (!pollingIntervalRef.current && state.is_running) {
+        pollingIntervalRef.current = setInterval(() => {
+          fetchTimerState();
+        }, 500);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset timer');
-    } finally {
-      setIsLoading(false);
     }
-  }, [fetchState]);
+  }, [calculateFacialState, fetchTimerState]);
 
-  const pause = useCallback(async () => {
+  const handlePause = useCallback(async () => {
     try {
+      const state = await pauseTimer();
+      setTimerState(state);
+      setFacialState(calculateFacialState(state));
       setError(null);
-      await pauseTimer();
-      await fetchState();
+
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to pause timer');
     }
-  }, [fetchState]);
+  }, [calculateFacialState]);
 
-  const resume = useCallback(async () => {
+  const handleResume = useCallback(async () => {
     try {
+      const state = await resumeTimer();
+      setTimerState(state);
+      setFacialState(calculateFacialState(state));
       setError(null);
-      await resumeTimer();
-      await fetchState();
+
+      if (!pollingIntervalRef.current) {
+        pollingIntervalRef.current = setInterval(() => {
+          fetchTimerState();
+        }, 500);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to resume timer');
     }
-  }, [fetchState]);
+  }, [calculateFacialState, fetchTimerState]);
+
+  const handleConfigure = useCallback(async (duration: number) => {
+    try {
+      const state = await configureTimer(duration);
+      setTimerState(state);
+      setFacialState(calculateFacialState(state));
+      setError(null);
+
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to configure timer');
+    }
+  }, [calculateFacialState]);
+
+  useEffect(() => {
+    fetchTimerState();
+  }, [fetchTimerState]);
+
+  useEffect(() => {
+    if (timerState.is_running && !pollingIntervalRef.current) {
+      pollingIntervalRef.current = setInterval(() => {
+        fetchTimerState();
+      }, 500);
+    }
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, [timerState.is_running, fetchTimerState]);
 
   return {
     timerState,
-    urgencyState,
     facialState,
-    configure,
-    reset,
-    pause,
-    resume,
-    isLoading,
     error,
+    onReset: handleReset,
+    onPause: handlePause,
+    onResume: handleResume,
+    onConfigure: handleConfigure,
   };
 }
