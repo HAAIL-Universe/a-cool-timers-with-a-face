@@ -1,98 +1,84 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useTimer } from './hooks/useTimer';
-import { TimerDisplay } from './components/TimerDisplay';
-import { ControlButtons } from './components/ControlButtons';
-import { SettingsPanel } from './components/SettingsPanel';
-import { intensityToBackground } from './utils/colour';
-import './App.css';
+import TimerDisplay from './components/TimerDisplay';
+import FaceComponent from './components/FaceComponent';
+import ControlButtons from './components/ControlButtons';
+import SettingsPanel from './components/SettingsPanel';
+import { getUrgencyColour, getBackgroundColour } from './utils/colour';
+import './styles/App.css';
 
-export function App(): JSX.Element {
-  const {
-    timerState,
-    urgencyState,
-    facialState,
-    configure,
-    reset,
-    pause,
-    resume,
-    isLoading,
-    error,
-  } = useTimer();
-  const [settingsOpen, setSettingsOpen] = useState(false);
+const App: React.FC = () => {
+  const { timerState, facialState, error, onReset, onPause, onResume, onConfigure } = useTimer(60);
+  const [showSettings, setShowSettings] = React.useState(false);
 
-  if (!timerState || !urgencyState) {
-    return <div className="app-container loading">Loading...</div>;
-  }
+  const urgencyLevel = timerState.total_seconds > 0
+    ? ((timerState.total_seconds - timerState.seconds_remaining) / timerState.total_seconds) * 100
+    : 0;
 
-  const isPaused = timerState.is_paused;
-  const isExpired = timerState.is_expired;
-  const countdown = timerState.countdown;
-  const colourIntensity = urgencyState.colour_intensity;
+  const urgencyColour = getUrgencyColour(timerState.seconds_remaining, timerState.total_seconds);
+  const backgroundColour = timerState.is_expired ? '#4a4a4a' : getBackgroundColour(timerState.seconds_remaining, timerState.total_seconds);
 
-  const handleTogglePause = () => {
-    if (isPaused) {
-      resume();
-    } else {
-      pause();
-    }
+  const handleSettingsClose = () => {
+    setShowSettings(false);
   };
 
-  const handleOpenSettings = () => {
-    setSettingsOpen(true);
-  };
-
-  const handleCloseSettings = () => {
-    setSettingsOpen(false);
-  };
-
-  const backgroundGradient = intensityToBackground(colourIntensity);
-
-  const appStyle: React.CSSProperties = {
-    background: backgroundGradient,
-    minHeight: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: '2rem',
-    transition: 'background 0.3s ease',
+  const handleDurationSelect = (duration: number) => {
+    onConfigure(duration);
+    setShowSettings(false);
   };
 
   return (
-    <div className="app-container" style={appStyle}>
-      <div className="app-content">
-        {error && <div className="error-banner">{error}</div>}
+    <div
+      className="app-container"
+      style={{
+        backgroundColor: backgroundColour,
+        transition: 'background-color 0.3s ease',
+      }}
+    >
+      <header className="app-header">
+        <h1 className="app-title">TIMER FACE</h1>
+      </header>
 
-        <div className="face-section">
-          <div className="facial-state">{facialState}</div>
-        </div>
+      <main className="app-main">
+        <div className="timer-section">
+          <FaceComponent facialState={facialState} urgencyLevel={urgencyLevel} />
 
-        <div className="display-section">
           <TimerDisplay
-            countdown={countdown}
-            colourIntensity={colourIntensity}
-            isExpired={isExpired}
+            secondsRemaining={timerState.seconds_remaining}
+            colour={urgencyColour}
           />
+
+          {timerState.is_expired && (
+            <div className="expired-overlay">
+              <div className="expired-message">RESET TO CONTINUE</div>
+            </div>
+          )}
         </div>
 
-        <div className="controls-section">
+        <footer className="app-footer">
           <ControlButtons
-            isPaused={isPaused}
-            isExpired={isExpired}
-            onReset={reset}
-            onTogglePause={handleTogglePause}
-            onOpenSettings={handleOpenSettings}
+            isRunning={timerState.is_running}
+            isExpired={timerState.is_expired}
+            onReset={onReset}
+            onPause={onPause}
+            onResume={onResume}
+            onSettingsToggle={() => setShowSettings(!showSettings)}
           />
-        </div>
 
-        {isLoading && <div className="loading-indicator">Syncing...</div>}
-      </div>
+          {error && (
+            <div className="error-message">{error}</div>
+          )}
+        </footer>
+      </main>
 
-      <SettingsPanel
-        isOpen={settingsOpen}
-        onConfigure={configure}
-        onClose={handleCloseSettings}
-      />
+      {showSettings && (
+        <SettingsPanel
+          onClose={handleSettingsClose}
+          onDurationSelect={handleDurationSelect}
+        />
+      )}
     </div>
   );
-}
+};
+
+export default App;
