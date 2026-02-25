@@ -1,21 +1,34 @@
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import declarative_base
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
-from app.main import create_app
-from app.database import Base
-from app.models.timer import Timer, TimerEvent
+from app.main import app
+from app.database import Base, get_session
+from app.config import get_settings
+
+
+@pytest.fixture(scope="session")
+def event_loop_policy():
+    """Set event loop policy for async tests."""
+    import asyncio
+    if asyncio.sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    return asyncio.get_event_loop_policy()
 
 
 @pytest_asyncio.fixture
-async def test_engine():
-    """Create in-memory SQLite async engine for tests."""
+async def test_db_engine():
+    """Create test database engine."""
+    settings = get_settings()
+    test_db_url = settings.database_url.replace(
+        "postgresql://", "postgresql+asyncpg://"
+    ).replace("timers", "timers_test")
+    
     engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
+        test_db_url,
         echo=False,
-        future=True,
+        pool_pre_ping=True,
     )
     
     async with engine.begin() as conn:
@@ -23,53 +36,40 @@ async def test_engine():
     
     yield engine
     
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    
     await engine.dispose()
 
 
 @pytest_asyncio.fixture
-async def test_session_factory(test_engine):
-    """Create async session factory for tests."""
-    return async_sessionmaker(
-        test_engine,
+async def test_db_session(test_db_engine):
+    """Create test database session."""
+    async_session_factory = async_sessionmaker(
+        test_db_engine,
         class_=AsyncSession,
         expire_on_commit=False,
-        autoflush=False,
     )
-
-
-@pytest_asyncio.fixture
-async def test_session(test_session_factory):
-    """Create test database session."""
-    async with test_session_factory() as session:
+    
+    async with async_session_factory() as session:
         yield session
 
 
 @pytest_asyncio.fixture
-async def test_app(test_session_factory, monkeypatch):
-    """Create FastAPI test app with overridden database dependency."""
-    app = create_app()
+async def client(test_db_session):
+    """Create test HTTP client with overridden database dependency."""
+    async def override_get_session():
+        yield test_db_session
     
-    async def override_get_db():
-        async with test_session_factory() as session:
-            yield session
+    app.dependency_overrides[get_session] = override_get_session
     
-    from app.database import get_db
-    app.dependency_overrides[get_db] = override_get_db
-    
-    yield app
+    async with AsyncClient(app=app, base_url="http://test") as async_client:
+        yield async_client
     
     app.dependency_overrides.clear()
 
 
-@pytest_asyncio.fixture
-async def test_client(test_app):
-    """Create AsyncClient for testing FastAPI endpoints."""
-    async with AsyncClient(app=test_app, base_url="http://test") as client:
-        yield client
-
-
-@pytest.fixture(scope="session")
-def event_loop_policy():
-    """Use default event loop policy for async tests."""
-    import asyncio
-    return asyncio.get_event_loop_policy()
+@pytest.fixture
+def anyio_backend():
+    """Configure anyio backend for async tests."""
+    return "asyncio"

@@ -1,374 +1,419 @@
 import pytest
-import pytest_asyncio
-from datetime import datetime, timezone
-from app.services.timer_service import TimerService, TimerRepo, Timer
-from app.schemas.timer import TimerConfig
+from datetime import datetime
+from uuid import uuid4
+from unittest.mock import Mock, MagicMock
+
+from app.models.timer import Timer
+from app.services.timer_service import TimerService
+from app.schemas.timer import UrgencyLevel, TimerStatus
 
 
-@pytest_asyncio.fixture
-async def timer_repo():
-    """Create in-memory timer repository."""
-    return TimerRepo()
+@pytest.fixture
+def mock_repo():
+    """Create a mock TimerRepo."""
+    return Mock()
 
 
-@pytest_asyncio.fixture
-async def timer_service(timer_repo):
-    """Create TimerService instance."""
-    return TimerService(timer_repo)
+@pytest.fixture
+def timer_service(mock_repo):
+    """Create TimerService with mocked repo."""
+    return TimerService(mock_repo)
 
 
-class TestTimerServiceConfigure:
-    """Tests for timer configuration."""
-
-    async def test_configure_creates_timer(self, timer_service):
-        """Configure creates timer with correct duration."""
-        config = TimerConfig(duration=60)
-        state = await timer_service.configure(config)
-        
-        assert state.duration == 60
-        assert state.countdown == 60
-        assert state.is_paused is False
-        assert state.is_expired is False
-        assert state.urgency_level == "calm"
-        assert state.colour_intensity == 0.2
-
-    async def test_configure_sets_urgency_calm(self, timer_service):
-        """Configure full duration shows calm urgency."""
-        config = TimerConfig(duration=100)
-        state = await timer_service.configure(config)
-        
-        assert state.urgency_level == "calm"
-        assert state.colour_intensity == 0.2
-
-    async def test_configure_overwrites_previous_timer(self, timer_service):
-        """Configuring new timer overwrites previous one."""
-        config1 = TimerConfig(duration=60)
-        state1 = await timer_service.configure(config1)
-        
-        config2 = TimerConfig(duration=120)
-        state2 = await timer_service.configure(config2)
-        
-        assert state2.duration == 120
-        assert state2.countdown == 120
-
-    async def test_configure_last_reset_at_is_set(self, timer_service):
-        """Configure sets last_reset_at timestamp."""
-        config = TimerConfig(duration=30)
-        state = await timer_service.configure(config)
-        
-        assert state.last_reset_at is not None
-        assert isinstance(state.last_reset_at, str)
+@pytest.fixture
+def sample_timer():
+    """Create a sample timer for testing."""
+    return Timer(
+        id=uuid4(),
+        name="Test Timer",
+        duration_seconds=60,
+        remaining_seconds=60,
+        started_at=None,
+        paused_at=None,
+        reset_count=0,
+        status=TimerStatus.stopped,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
 
 
-class TestTimerServiceReset:
-    """Tests for timer reset."""
+class TestTimerServiceCreate:
+    """Tests for timer creation."""
 
-    async def test_reset_resets_countdown(self, timer_service):
-        """Reset sets countdown back to duration."""
-        config = TimerConfig(duration=60)
-        await timer_service.configure(config)
-        
-        state = await timer_service.reset()
-        
-        assert state.countdown == 60
-        assert state.is_paused is False
+    def test_create_timer(self, timer_service, mock_repo, sample_timer):
+        """Test creating a new timer."""
+        mock_repo.create_timer.return_value = sample_timer
 
-    async def test_reset_increments_reset_count(self, timer_service):
-        """Reset increments internal reset count."""
-        config = TimerConfig(duration=60)
-        await timer_service.configure(config)
-        
-        timer = await timer_service.repo.get_active_timer()
-        assert timer.reset_count == 0
-        
-        await timer_service.reset()
-        timer = await timer_service.repo.get_active_timer()
-        assert timer.reset_count == 1
+        result = timer_service.create_timer(60, "Workout")
 
-    async def test_reset_fails_when_no_timer(self, timer_service):
-        """Reset raises error when no active timer."""
-        with pytest.raises(ValueError, match="No active timer"):
-            await timer_service.reset()
+        assert result.id == sample_timer.id
+        assert result.duration_seconds == 60
+        assert result.remaining_seconds == 60
+        mock_repo.create_timer.assert_called_once_with(60, "Workout")
 
-    async def test_reset_fails_when_expired(self, timer_service):
-        """Reset raises error when timer has expired."""
-        config = TimerConfig(duration=1)
-        await timer_service.configure(config)
-        
-        timer = await timer_service.repo.get_active_timer()
-        timer.remaining_seconds = 0
-        await timer_service.repo.update_timer(timer)
-        
-        with pytest.raises(ValueError, match="Timer expired"):
-            await timer_service.reset()
+    def test_create_timer_default_name(self, timer_service, mock_repo, sample_timer):
+        """Test creating timer with default name."""
+        mock_repo.create_timer.return_value = sample_timer
 
-    async def test_reset_updates_started_at(self, timer_service):
-        """Reset updates started_at timestamp."""
-        config = TimerConfig(duration=60)
-        state1 = await timer_service.configure(config)
-        
-        timer1 = await timer_service.repo.get_active_timer()
-        initial_start = timer1.started_at
-        
-        state2 = await timer_service.reset()
-        
-        timer2 = await timer_service.repo.get_active_timer()
-        assert timer2.started_at > initial_start
+        timer_service.create_timer(45)
+
+        mock_repo.create_timer.assert_called_once_with(45, "Workout")
+
+
+class TestTimerServiceGet:
+    """Tests for fetching timers."""
+
+    def test_get_timer_exists(self, timer_service, mock_repo, sample_timer):
+        """Test fetching existing timer."""
+        mock_repo.get_timer.return_value = sample_timer
+
+        result = timer_service.get_timer(sample_timer.id)
+
+        assert result.id == sample_timer.id
+        mock_repo.get_timer.assert_called_once_with(sample_timer.id)
+
+    def test_get_timer_not_found(self, timer_service, mock_repo):
+        """Test fetching non-existent timer."""
+        timer_id = uuid4()
+        mock_repo.get_timer.return_value = None
+
+        result = timer_service.get_timer(timer_id)
+
+        assert result is None
+
+
+class TestTimerServiceStart:
+    """Tests for starting timers."""
+
+    def test_start_timer(self, timer_service, mock_repo, sample_timer):
+        """Test starting a timer."""
+        mock_repo.get_timer.return_value = sample_timer
+        started_timer = Timer(
+            id=sample_timer.id,
+            name=sample_timer.name,
+            duration_seconds=60,
+            remaining_seconds=60,
+            started_at=datetime.utcnow(),
+            paused_at=None,
+            reset_count=0,
+            status=TimerStatus.running,
+            created_at=sample_timer.created_at,
+            updated_at=datetime.utcnow(),
+        )
+        mock_repo.update_timer.return_value = started_timer
+
+        result = timer_service.start_timer(sample_timer.id)
+
+        assert result.status == TimerStatus.running
+        assert result.started_at is not None
+        assert result.paused_at is None
+        mock_repo.record_event.assert_called_once()
+
+    def test_start_nonexistent_timer(self, timer_service, mock_repo):
+        """Test starting non-existent timer."""
+        timer_id = uuid4()
+        mock_repo.get_timer.return_value = None
+
+        result = timer_service.start_timer(timer_id)
+
+        assert result is None
+        mock_repo.update_timer.assert_not_called()
 
 
 class TestTimerServicePause:
-    """Tests for timer pause."""
+    """Tests for pausing timers."""
 
-    async def test_pause_sets_paused_status(self, timer_service):
-        """Pause sets is_paused to True."""
-        config = TimerConfig(duration=60)
-        await timer_service.configure(config)
-        
-        state = await timer_service.pause()
-        
-        assert state.is_paused is True
+    def test_pause_timer(self, timer_service, mock_repo, sample_timer):
+        """Test pausing a running timer."""
+        running_timer = Timer(
+            id=sample_timer.id,
+            name=sample_timer.name,
+            duration_seconds=60,
+            remaining_seconds=45,
+            started_at=datetime.utcnow(),
+            paused_at=None,
+            reset_count=0,
+            status=TimerStatus.running,
+            created_at=sample_timer.created_at,
+            updated_at=datetime.utcnow(),
+        )
+        mock_repo.get_timer.return_value = running_timer
+        paused_timer = Timer(
+            id=running_timer.id,
+            name=running_timer.name,
+            duration_seconds=60,
+            remaining_seconds=45,
+            started_at=running_timer.started_at,
+            paused_at=datetime.utcnow(),
+            reset_count=0,
+            status=TimerStatus.paused,
+            created_at=running_timer.created_at,
+            updated_at=datetime.utcnow(),
+        )
+        mock_repo.update_timer.return_value = paused_timer
 
-    async def test_pause_preserves_countdown(self, timer_service):
-        """Pause preserves remaining countdown."""
-        config = TimerConfig(duration=60)
-        await timer_service.configure(config)
-        
-        state = await timer_service.pause()
-        
-        assert state.countdown == 60
+        result = timer_service.pause_timer(running_timer.id)
 
-    async def test_pause_fails_when_no_timer(self, timer_service):
-        """Pause raises error when no active timer."""
-        with pytest.raises(ValueError, match="No active timer"):
-            await timer_service.pause()
-
-    async def test_pause_updates_paused_at(self, timer_service):
-        """Pause sets paused_at timestamp."""
-        config = TimerConfig(duration=60)
-        await timer_service.configure(config)
-        
-        await timer_service.pause()
-        
-        timer = await timer_service.repo.get_active_timer()
-        assert timer.paused_at is not None
-
-
-class TestTimerServiceResume:
-    """Tests for timer resume."""
-
-    async def test_resume_unpauses_timer(self, timer_service):
-        """Resume sets is_paused to False."""
-        config = TimerConfig(duration=60)
-        await timer_service.configure(config)
-        await timer_service.pause()
-        
-        state = await timer_service.resume()
-        
-        assert state.is_paused is False
-
-    async def test_resume_clears_paused_at(self, timer_service):
-        """Resume clears paused_at timestamp."""
-        config = TimerConfig(duration=60)
-        await timer_service.configure(config)
-        await timer_service.pause()
-        
-        await timer_service.resume()
-        
-        timer = await timer_service.repo.get_active_timer()
-        assert timer.paused_at is None
-
-    async def test_resume_fails_when_no_timer(self, timer_service):
-        """Resume raises error when no active timer."""
-        with pytest.raises(ValueError, match="No active timer"):
-            await timer_service.resume()
-
-    async def test_resume_preserves_countdown(self, timer_service):
-        """Resume preserves remaining countdown."""
-        config = TimerConfig(duration=60)
-        await timer_service.configure(config)
-        await timer_service.pause()
-        
-        state = await timer_service.resume()
-        
-        assert state.countdown == 60
+        assert result.status == TimerStatus.paused
+        assert result.paused_at is not None
+        mock_repo.record_event.assert_called_once()
 
 
-class TestTimerServiceGetState:
-    """Tests for getting timer state."""
+class TestTimerServiceReset:
+    """Tests for resetting timers."""
 
-    async def test_get_state_no_timer(self, timer_service):
-        """Get state returns default expired state when no timer."""
-        state = await timer_service.get_state()
-        
-        assert state.countdown == 0
-        assert state.duration == 0
-        assert state.is_expired is True
-        assert state.urgency_level == "calm"
-        assert state.colour_intensity == 0.0
+    def test_reset_timer_to_original_duration(self, timer_service, mock_repo, sample_timer):
+        """Test resetting timer to original duration."""
+        running_timer = Timer(
+            id=sample_timer.id,
+            name=sample_timer.name,
+            duration_seconds=60,
+            remaining_seconds=30,
+            started_at=datetime.utcnow(),
+            paused_at=None,
+            reset_count=0,
+            status=TimerStatus.running,
+            created_at=sample_timer.created_at,
+            updated_at=datetime.utcnow(),
+        )
+        mock_repo.get_timer.return_value = running_timer
+        reset_timer = Timer(
+            id=running_timer.id,
+            name=running_timer.name,
+            duration_seconds=60,
+            remaining_seconds=60,
+            started_at=None,
+            paused_at=None,
+            reset_count=1,
+            status=TimerStatus.stopped,
+            created_at=running_timer.created_at,
+            updated_at=datetime.utcnow(),
+        )
+        mock_repo.update_timer.return_value = reset_timer
 
-    async def test_get_state_returns_current_state(self, timer_service):
-        """Get state returns active timer state."""
-        config = TimerConfig(duration=60)
-        await timer_service.configure(config)
-        
-        state = await timer_service.get_state()
-        
-        assert state.duration == 60
-        assert state.is_paused is False
-        assert state.is_expired is False
+        result = timer_service.reset_timer(running_timer.id)
 
-    async def test_get_state_paused(self, timer_service):
-        """Get state reflects paused status."""
-        config = TimerConfig(duration=60)
-        await timer_service.configure(config)
-        await timer_service.pause()
-        
-        state = await timer_service.get_state()
-        
-        assert state.is_paused is True
+        assert result.remaining_seconds == 60
+        assert result.status == TimerStatus.stopped
+        assert result.reset_count == 1
+        mock_repo.record_event.assert_called_once()
 
+    def test_reset_timer_to_new_duration(self, timer_service, mock_repo, sample_timer):
+        """Test resetting timer to new duration."""
+        mock_repo.get_timer.return_value = sample_timer
+        reset_timer = Timer(
+            id=sample_timer.id,
+            name=sample_timer.name,
+            duration_seconds=90,
+            remaining_seconds=90,
+            started_at=None,
+            paused_at=None,
+            reset_count=1,
+            status=TimerStatus.stopped,
+            created_at=sample_timer.created_at,
+            updated_at=datetime.utcnow(),
+        )
+        mock_repo.update_timer.return_value = reset_timer
 
-class TestTimerServiceUrgencyCalculation:
-    """Tests for urgency and colour intensity calculation."""
+        result = timer_service.reset_timer(sample_timer.id, 90)
 
-    async def test_urgency_calm_above_66_percent(self, timer_service):
-        """Urgency is calm when remaining > 66% of duration."""
-        config = TimerConfig(duration=100)
-        await timer_service.configure(config)
-        
-        timer = await timer_service.repo.get_active_timer()
-        timer.remaining_seconds = 70
-        await timer_service.repo.update_timer(timer)
-        
-        state = await timer_service.get_state()
-        
-        assert state.urgency_level == "calm"
-        assert state.colour_intensity == 0.2
-
-    async def test_urgency_anxious_between_33_66_percent(self, timer_service):
-        """Urgency is anxious when 33% < remaining <= 66%."""
-        config = TimerConfig(duration=100)
-        await timer_service.configure(config)
-        
-        timer = await timer_service.repo.get_active_timer()
-        timer.remaining_seconds = 50
-        await timer_service.repo.update_timer(timer)
-        
-        state = await timer_service.get_state()
-        
-        assert state.urgency_level == "anxious"
-        assert state.colour_intensity == 0.65
-
-    async def test_urgency_alarm_below_33_percent(self, timer_service):
-        """Urgency is alarm when remaining <= 33% of duration."""
-        config = TimerConfig(duration=100)
-        await timer_service.configure(config)
-        
-        timer = await timer_service.repo.get_active_timer()
-        timer.remaining_seconds = 20
-        await timer_service.repo.update_timer(timer)
-        
-        state = await timer_service.get_state()
-        
-        assert state.urgency_level == "alarm"
-        assert state.colour_intensity == 0.95
-
-    async def test_urgency_zero_duration(self, timer_service):
-        """Urgency defaults to calm with zero duration."""
-        level, intensity = TimerService._calc_urgency(0, 0)
-        
-        assert level == "calm"
-        assert intensity == 0.0
+        assert result.remaining_seconds == 90
+        assert result.duration_seconds == 90
 
 
-class TestTimerServiceGetUrgency:
-    """Tests for get_urgency endpoint."""
+class TestTimerServiceTick:
+    """Tests for timer countdown ticks."""
 
-    async def test_get_urgency_no_timer(self, timer_service):
-        """Get urgency returns default state when no timer."""
-        urgency = await timer_service.get_urgency()
-        
-        assert urgency.urgency_level == "calm"
-        assert urgency.colour_intensity == 0.0
-        assert urgency.remaining_percent == 0.0
-        assert urgency.facial_expression == "😐"
+    def test_tick_timer_running(self, timer_service, mock_repo, sample_timer):
+        """Test ticking a running timer."""
+        running_timer = Timer(
+            id=sample_timer.id,
+            name=sample_timer.name,
+            duration_seconds=60,
+            remaining_seconds=30,
+            started_at=datetime.utcnow(),
+            paused_at=None,
+            reset_count=0,
+            status=TimerStatus.running,
+            created_at=sample_timer.created_at,
+            updated_at=datetime.utcnow(),
+        )
+        mock_repo.get_timer.return_value = running_timer
+        ticked_timer = Timer(
+            id=running_timer.id,
+            name=running_timer.name,
+            duration_seconds=60,
+            remaining_seconds=29,
+            started_at=running_timer.started_at,
+            paused_at=None,
+            reset_count=0,
+            status=TimerStatus.running,
+            created_at=running_timer.created_at,
+            updated_at=datetime.utcnow(),
+        )
+        mock_repo.update_timer.return_value = ticked_timer
 
-    async def test_get_urgency_calm_expression(self, timer_service):
-        """Get urgency returns calm expression for calm urgency."""
-        config = TimerConfig(duration=100)
-        await timer_service.configure(config)
-        
-        urgency = await timer_service.get_urgency()
-        
-        assert urgency.facial_expression == "😊"
+        result = timer_service.tick_timer(running_timer.id)
 
-    async def test_get_urgency_anxious_expression(self, timer_service):
-        """Get urgency returns anxious expression for anxious urgency."""
-        config = TimerConfig(duration=100)
-        await timer_service.configure(config)
-        
-        timer = await timer_service.repo.get_active_timer()
-        timer.remaining_seconds = 50
-        await timer_service.repo.update_timer(timer)
-        
-        urgency = await timer_service.get_urgency()
-        
-        assert urgency.facial_expression == "😰"
+        assert result.remaining_seconds == 29
+        assert result.status == TimerStatus.running
+        mock_repo.record_event.assert_not_called()
 
-    async def test_get_urgency_alarm_expression(self, timer_service):
-        """Get urgency returns alarm expression for alarm urgency."""
-        config = TimerConfig(duration=100)
-        await timer_service.configure(config)
-        
-        timer = await timer_service.repo.get_active_timer()
-        timer.remaining_seconds = 20
-        await timer_service.repo.update_timer(timer)
-        
-        urgency = await timer_service.get_urgency()
-        
-        assert urgency.facial_expression == "😨"
+    def test_tick_timer_to_expiry(self, timer_service, mock_repo, sample_timer):
+        """Test ticking timer to zero."""
+        running_timer = Timer(
+            id=sample_timer.id,
+            name=sample_timer.name,
+            duration_seconds=60,
+            remaining_seconds=1,
+            started_at=datetime.utcnow(),
+            paused_at=None,
+            reset_count=0,
+            status=TimerStatus.running,
+            created_at=sample_timer.created_at,
+            updated_at=datetime.utcnow(),
+        )
+        mock_repo.get_timer.return_value = running_timer
+        expired_timer = Timer(
+            id=running_timer.id,
+            name=running_timer.name,
+            duration_seconds=60,
+            remaining_seconds=0,
+            started_at=running_timer.started_at,
+            paused_at=None,
+            reset_count=0,
+            status=TimerStatus.expired,
+            created_at=running_timer.created_at,
+            updated_at=datetime.utcnow(),
+        )
+        mock_repo.update_timer.return_value = expired_timer
 
-    async def test_get_urgency_remaining_percent(self, timer_service):
-        """Get urgency calculates remaining_percent correctly."""
-        config = TimerConfig(duration=100)
-        await timer_service.configure(config)
-        
-        timer = await timer_service.repo.get_active_timer()
-        timer.remaining_seconds = 50
-        await timer_service.repo.update_timer(timer)
-        
-        urgency = await timer_service.get_urgency()
-        
-        assert urgency.remaining_percent == 0.5
+        result = timer_service.tick_timer(running_timer.id)
+
+        assert result.remaining_seconds == 0
+        assert result.status == TimerStatus.expired
+        mock_repo.record_event.assert_called_once()
+
+    def test_tick_paused_timer_no_change(self, timer_service, mock_repo, sample_timer):
+        """Test ticking paused timer does nothing."""
+        paused_timer = Timer(
+            id=sample_timer.id,
+            name=sample_timer.name,
+            duration_seconds=60,
+            remaining_seconds=30,
+            started_at=None,
+            paused_at=datetime.utcnow(),
+            reset_count=0,
+            status=TimerStatus.paused,
+            created_at=sample_timer.created_at,
+            updated_at=datetime.utcnow(),
+        )
+        mock_repo.get_timer.return_value = paused_timer
+
+        result = timer_service.tick_timer(paused_timer.id)
+
+        assert result == paused_timer
+        mock_repo.update_timer.assert_not_called()
 
 
-class TestTimerServiceElapsedCalculation:
-    """Tests for elapsed time calculation in get_state."""
+class TestTimerServiceUrgency:
+    """Tests for urgency calculation."""
 
-    async def test_paused_timer_preserves_remaining(self, timer_service):
-        """Paused timer countdown does not decrease."""
-        config = TimerConfig(duration=60)
-        await timer_service.configure(config)
-        
-        timer = await timer_service.repo.get_active_timer()
-        timer.remaining_seconds = 45
-        timer.status = "paused"
-        await timer_service.repo.update_timer(timer)
-        
-        state = await timer_service.get_state()
-        
-        assert state.countdown == 45
+    def test_urgency_calm(self, timer_service):
+        """Test calm urgency when >50% time remains."""
+        timer = Timer(
+            id=uuid4(),
+            name="Test",
+            duration_seconds=100,
+            remaining_seconds=60,
+            started_at=None,
+            paused_at=None,
+            reset_count=0,
+            status=TimerStatus.running,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
 
-    async def test_no_start_time_returns_full_remaining(self, timer_service):
-        """Timer without start_at returns full remaining_seconds."""
-        config = TimerConfig(duration=60)
-        await timer_service.configure(config)
-        
-        timer = await timer_service.repo.get_active_timer()
-        timer.started_at = None
-        timer.remaining_seconds = 30
-        await timer_service.repo.update_timer(timer)
-        
-        state = await timer_service.get_state()
-        
-        assert state.countdown == 30
+        urgency = timer_service._calculate_urgency(timer)
+
+        assert urgency == UrgencyLevel.calm
+
+    def test_urgency_elevated(self, timer_service):
+        """Test elevated urgency when 25-50% time remains."""
+        timer = Timer(
+            id=uuid4(),
+            name="Test",
+            duration_seconds=100,
+            remaining_seconds=40,
+            started_at=None,
+            paused_at=None,
+            reset_count=0,
+            status=TimerStatus.running,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+
+        urgency = timer_service._calculate_urgency(timer)
+
+        assert urgency == UrgencyLevel.elevated
+
+    def test_urgency_anxious(self, timer_service):
+        """Test anxious urgency when 0-25% time remains."""
+        timer = Timer(
+            id=uuid4(),
+            name="Test",
+            duration_seconds=100,
+            remaining_seconds=15,
+            started_at=None,
+            paused_at=None,
+            reset_count=0,
+            status=TimerStatus.running,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+
+        urgency = timer_service._calculate_urgency(timer)
+
+        assert urgency == UrgencyLevel.anxious
+
+    def test_urgency_alarm(self, timer_service):
+        """Test alarm urgency when expired."""
+        timer = Timer(
+            id=uuid4(),
+            name="Test",
+            duration_seconds=100,
+            remaining_seconds=0,
+            started_at=None,
+            paused_at=None,
+            reset_count=0,
+            status=TimerStatus.expired,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+
+        urgency = timer_service._calculate_urgency(timer)
+
+        assert urgency == UrgencyLevel.alarm
+
+    def test_calculate_urgency_response(self, timer_service):
+        """Test visual urgency response calculation."""
+        timer = Timer(
+            id=uuid4(),
+            name="Test",
+            duration_seconds=100,
+            remaining_seconds=30,
+            started_at=None,
+            paused_at=None,
+            reset_count=0,
+            status=TimerStatus.running,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+
+        response = timer_service.calculate_urgency_response(timer)
+
+        assert "level" in response
+        assert "colour_intensity" in response
+        assert "facial_expression" in response
+        assert response["colour_intensity"] == 0.7
+        assert isinstance(response["facial_expression"], str)

@@ -1,26 +1,84 @@
-from pydantic import BaseModel, Field
+from enum import Enum
 from typing import Optional
+from pydantic import BaseModel, Field
+from datetime import datetime
 
 
-class TimerConfig(BaseModel):
-    """Timer configuration request."""
-    duration: int = Field(..., description="Countdown duration in seconds (positive integer)", example=60)
+class TimerStatus(str, Enum):
+    """Timer operational state."""
+    stopped = "stopped"
+    running = "running"
+    paused = "paused"
+    expired = "expired"
 
 
-class TimerState(BaseModel):
-    """Complete timer state snapshot."""
-    countdown: int = Field(..., description="Remaining seconds on countdown (0 if expired)", example=45)
-    duration: int = Field(..., description="Configured timer duration in seconds", example=60)
-    is_paused: bool = Field(..., description="Whether countdown is paused", example=False)
-    is_expired: bool = Field(..., description="Whether countdown has reached zero", example=False)
-    urgency_level: str = Field(..., description="Current urgency classification", example="anxious")
-    colour_intensity: float = Field(..., description="Colour intensity 0.0 (cool/dim) to 1.0 (hot/bright red)", example=0.65)
-    last_reset_at: Optional[str] = Field(None, description="ISO timestamp of last reset or configuration", example="2025-01-15T10:30:00Z")
+class UrgencyLevel(int, Enum):
+    """Visual feedback urgency escalation (0-3)."""
+    calm = 0
+    alert = 1
+    caution = 2
+    alarm = 3
 
 
-class UrgencyState(BaseModel):
-    """Real-time urgency and visual feedback state."""
-    urgency_level: str = Field(..., description="Current urgency classification based on remaining time ratio", example="alarm")
-    colour_intensity: float = Field(..., description="Colour intensity 0.0 (cool) to 1.0 (hot red); drives visual feedback", example=0.95)
-    remaining_percent: float = Field(..., description="Percentage of countdown remaining (0.0 to 1.0)", example=0.15)
-    facial_expression: str = Field(..., description="8-bit facial expression reflecting urgency", example="😨")
+class TimerEventType(str, Enum):
+    """Timer state transition events."""
+    reset = "reset"
+    started = "started"
+    paused = "paused"
+    expired = "expired"
+
+
+class TimerEventCreate(BaseModel):
+    """Create a timer event log entry."""
+    timer_id: str
+    event_type: TimerEventType
+    urgency_level: UrgencyLevel = UrgencyLevel.calm
+
+
+class TimerEventResponse(BaseModel):
+    """Timer event retrieved from storage."""
+    id: str
+    timer_id: str
+    event_type: TimerEventType
+    urgency_level: UrgencyLevel
+    recorded_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TimerCreate(BaseModel):
+    """Configure a new timer."""
+    name: str = Field(default="Workout", min_length=1, max_length=255)
+    duration_seconds: int = Field(ge=1, le=3600)
+
+
+class TimerUpdate(BaseModel):
+    """Update timer state (pause/reset)."""
+    status: Optional[TimerStatus] = None
+    remaining_seconds: Optional[int] = None
+
+
+class TimerResponse(BaseModel):
+    """Timer state for API response."""
+    id: str
+    name: str
+    duration_seconds: int
+    remaining_seconds: int
+    status: TimerStatus
+    reset_count: int
+    started_at: Optional[datetime] = None
+    paused_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class UrgencyResponse(BaseModel):
+    """Current urgency level with intensity metadata."""
+    urgency_level: UrgencyLevel
+    remaining_seconds: int
+    duration_seconds: int
+    intensity_percent: float = Field(ge=0, le=100)

@@ -1,14 +1,17 @@
 import pytest
 from httpx import AsyncClient
 from datetime import datetime, timezone
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import Timer, TimerEvent
+from app.schemas import TimerState, TimerConfig, UrgencyState
 
 
 @pytest.mark.asyncio
-async def test_get_timer_state(test_client: AsyncClient):
-    """GET /api/timer returns a valid TimerState JSON with all required fields."""
-    response = await test_client.get("/api/timer")
+async def test_get_timer_state_initial(client: AsyncClient, test_db_session: AsyncSession):
+    """Get timer state returns valid TimerState."""
+    response = await client.get("/api/timer")
     assert response.status_code == 200
-    
     data = response.json()
     assert "countdown" in data
     assert "duration" in data
@@ -16,109 +19,88 @@ async def test_get_timer_state(test_client: AsyncClient):
     assert "is_expired" in data
     assert "urgency_level" in data
     assert "colour_intensity" in data
-    assert "last_reset_at" in data
-    
-    assert isinstance(data["countdown"], int)
-    assert isinstance(data["duration"], int)
-    assert isinstance(data["is_paused"], bool)
-    assert isinstance(data["is_expired"], bool)
-    assert isinstance(data["urgency_level"], str)
-    assert isinstance(data["colour_intensity"], (int, float))
-    assert isinstance(data["last_reset_at"], str)
-    
-    assert data["urgency_level"] in ["calm", "anxious", "alarm"]
-    assert 0.0 <= data["colour_intensity"] <= 1.0
 
 
 @pytest.mark.asyncio
-async def test_configure_timer(test_client: AsyncClient):
-    """POST /api/timer with duration configures timer and returns updated TimerState."""
-    payload = {"duration": 60}
-    response = await test_client.post("/api/timer", json=payload)
+async def test_configure_timer(client: AsyncClient, test_db_session: AsyncSession):
+    """Configure timer with duration."""
+    response = await client.post(
+        "/api/timer",
+        json={"duration": 60}
+    )
     assert response.status_code == 200
-    
     data = response.json()
     assert data["duration"] == 60
     assert data["countdown"] == 60
-    assert data["is_paused"] is False
     assert data["is_expired"] is False
-    assert data["urgency_level"] == "calm"
-    assert data["colour_intensity"] == 0.0
+    assert data["is_paused"] is True
 
 
 @pytest.mark.asyncio
-async def test_configure_timer_with_zero_duration(test_client: AsyncClient):
-    """POST /api/timer with invalid duration returns 422."""
-    payload = {"duration": 0}
-    response = await test_client.post("/api/timer", json=payload)
+async def test_configure_timer_invalid_duration(client: AsyncClient):
+    """Configure timer with invalid duration fails."""
+    response = await client.post(
+        "/api/timer",
+        json={"duration": -5}
+    )
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_configure_timer_with_negative_duration(test_client: AsyncClient):
-    """POST /api/timer with negative duration returns 422."""
-    payload = {"duration": -10}
-    response = await test_client.post("/api/timer", json=payload)
-    assert response.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_reset_timer_when_running(test_client: AsyncClient):
-    """POST /api/timer/reset returns 200 when timer is running."""
-    await test_client.post("/api/timer", json={"duration": 60})
-    response = await test_client.post("/api/timer/reset")
+async def test_pause_timer(client: AsyncClient, test_db_session: AsyncSession):
+    """Pause running timer."""
+    await client.post("/api/timer", json={"duration": 60})
+    response = await client.post("/api/timer/pause")
     assert response.status_code == 200
-    
-    data = response.json()
-    assert data["countdown"] == 60
-    assert data["is_expired"] is False
-
-
-@pytest.mark.asyncio
-async def test_pause_timer(test_client: AsyncClient):
-    """POST /api/timer/pause pauses active countdown."""
-    await test_client.post("/api/timer", json={"duration": 60})
-    response = await test_client.post("/api/timer/pause")
-    assert response.status_code == 200
-    
     data = response.json()
     assert data["is_paused"] is True
-    assert data["countdown"] == 60
 
 
 @pytest.mark.asyncio
-async def test_pause_then_resume(test_client: AsyncClient):
-    """POST /api/timer/resume resumes paused countdown."""
-    await test_client.post("/api/timer", json={"duration": 60})
-    await test_client.post("/api/timer/pause")
-    response = await test_client.post("/api/timer/resume")
+async def test_resume_timer(client: AsyncClient, test_db_session: AsyncSession):
+    """Resume paused timer."""
+    await client.post("/api/timer", json={"duration": 60})
+    await client.post("/api/timer/pause")
+    response = await client.post("/api/timer/resume")
     assert response.status_code == 200
-    
     data = response.json()
     assert data["is_paused"] is False
 
 
 @pytest.mark.asyncio
-async def test_get_urgency_calm(test_client: AsyncClient):
-    """GET /api/urgency returns calm when timer is fresh."""
-    await test_client.post("/api/timer", json={"duration": 100})
-    response = await test_client.get("/api/urgency")
+async def test_reset_timer(client: AsyncClient, test_db_session: AsyncSession):
+    """Reset timer before expiry."""
+    await client.post("/api/timer", json={"duration": 60})
+    response = await client.post("/api/timer/reset")
     assert response.status_code == 200
-    
     data = response.json()
-    assert data["urgency_level"] == "calm"
-    assert data["colour_intensity"] == 0.0
-    assert "remaining_percent" in data
-    assert "facial_expression" in data
+    assert data["countdown"] == 60
+    assert data["is_expired"] is False
 
 
 @pytest.mark.asyncio
-async def test_get_urgency_anxious(test_client: AsyncClient):
-    """GET /api/urgency returns anxious state at intermediate depletion."""
-    await test_client.post("/api/timer", json={"duration": 100})
-    response = await test_client.get("/api/urgency")
+async def test_reset_expired_timer_fails(client: AsyncClient, test_db_session: AsyncSession):
+    """Reset expired timer returns 400."""
+    timer = Timer(
+        name="Test",
+        duration_seconds=1,
+        remaining_seconds=0,
+        status="expired"
+    )
+    test_db_session.add(timer)
+    await test_db_session.commit()
+
+    response = await client.post("/api/timer/reset")
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_get_urgency_state(client: AsyncClient, test_db_session: AsyncSession):
+    """Get current urgency state."""
+    await client.post("/api/timer", json={"duration": 60})
+    response = await client.get("/api/urgency")
+    assert response.status_code == 200
     data = response.json()
-    
     assert "urgency_level" in data
     assert data["urgency_level"] in ["calm", "anxious", "alarm"]
     assert "colour_intensity" in data
@@ -126,145 +108,99 @@ async def test_get_urgency_anxious(test_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_urgency_state_contains_all_fields(test_client: AsyncClient):
-    """GET /api/urgency returns UrgencyState with all required fields."""
-    await test_client.post("/api/timer", json={"duration": 60})
-    response = await test_client.get("/api/urgency")
-    assert response.status_code == 200
-    
+async def test_urgency_calm_high_time(client: AsyncClient, test_db_session: AsyncSession):
+    """Urgency is calm when >66% time remains."""
+    await client.post("/api/timer", json={"duration": 100})
+    response = await client.get("/api/urgency")
     data = response.json()
-    assert "urgency_level" in data
-    assert "colour_intensity" in data
-    assert "remaining_percent" in data
-    assert "facial_expression" in data
-    
-    assert isinstance(data["urgency_level"], str)
-    assert isinstance(data["colour_intensity"], (int, float))
-    assert isinstance(data["remaining_percent"], (int, float))
-    assert isinstance(data["facial_expression"], str)
+    assert data["urgency_level"] == "calm"
+    assert data["colour_intensity"] < 0.4
 
 
 @pytest.mark.asyncio
-async def test_timer_state_after_configure_then_reset(test_client: AsyncClient):
-    """Timer state chain: configure -> reset maintains consistency."""
-    config = await test_client.post("/api/timer", json={"duration": 45})
-    assert config.status_code == 200
-    
-    reset = await test_client.post("/api/timer/reset")
-    assert reset.status_code == 200
-    
-    data = reset.json()
-    assert data["countdown"] == 45
-    assert data["duration"] == 45
-    assert data["is_expired"] is False
+async def test_urgency_anxious_medium_time(client: AsyncClient, test_db_session: AsyncSession):
+    """Urgency is anxious when 33-66% time remains."""
+    timer = Timer(
+        name="Test",
+        duration_seconds=100,
+        remaining_seconds=50,
+        status="running"
+    )
+    test_db_session.add(timer)
+    await test_db_session.commit()
 
-
-@pytest.mark.asyncio
-async def test_timer_state_persists_across_requests(test_client: AsyncClient):
-    """Timer state persists across multiple GET requests."""
-    await test_client.post("/api/timer", json={"duration": 75})
-    
-    first_get = await test_client.get("/api/timer")
-    second_get = await test_client.get("/api/timer")
-    
-    assert first_get.json()["duration"] == second_get.json()["duration"]
-    assert first_get.json()["countdown"] == second_get.json()["countdown"]
-
-
-@pytest.mark.asyncio
-async def test_pause_then_get_state(test_client: AsyncClient):
-    """GET /api/timer reflects paused state after pause request."""
-    await test_client.post("/api/timer", json={"duration": 60})
-    await test_client.post("/api/timer/pause")
-    
-    response = await test_client.get("/api/timer")
+    response = await client.get("/api/urgency")
     data = response.json()
-    assert data["is_paused"] is True
+    assert data["urgency_level"] == "anxious"
+    assert 0.4 <= data["colour_intensity"] <= 0.7
 
 
 @pytest.mark.asyncio
-async def test_urgency_level_correlates_with_colour_intensity(test_client: AsyncClient):
-    """urgency_level and colour_intensity are correlated in UrgencyState."""
-    await test_client.post("/api/timer", json={"duration": 100})
-    response = await test_client.get("/api/urgency")
+async def test_urgency_alarm_low_time(client: AsyncClient, test_db_session: AsyncSession):
+    """Urgency is alarm when <33% time remains."""
+    timer = Timer(
+        name="Test",
+        duration_seconds=100,
+        remaining_seconds=20,
+        status="running"
+    )
+    test_db_session.add(timer)
+    await test_db_session.commit()
+
+    response = await client.get("/api/urgency")
+    data = response.json()
+    assert data["urgency_level"] == "alarm"
+    assert data["colour_intensity"] > 0.7
+
+
+@pytest.mark.asyncio
+async def test_timer_state_structure(client: AsyncClient, test_db_session: AsyncSession):
+    """TimerState response includes all required fields."""
+    await client.post("/api/timer", json={"duration": 60})
+    response = await client.get("/api/timer")
     data = response.json()
     
-    if data["urgency_level"] == "calm":
-        assert data["colour_intensity"] <= 0.33
-    elif data["urgency_level"] == "anxious":
-        assert 0.33 < data["colour_intensity"] <= 0.67
-    elif data["urgency_level"] == "alarm":
-        assert data["colour_intensity"] > 0.67
+    required_fields = [
+        "countdown",
+        "duration",
+        "is_paused",
+        "is_expired",
+        "urgency_level",
+        "colour_intensity",
+        "last_reset_at"
+    ]
+    for field in required_fields:
+        assert field in data, f"Missing field: {field}"
 
 
 @pytest.mark.asyncio
-async def test_facial_expression_varies_by_urgency(test_client: AsyncClient):
-    """facial_expression field exists and is a valid string."""
-    await test_client.post("/api/timer", json={"duration": 60})
-    response = await test_client.get("/api/urgency")
+async def test_last_reset_at_timestamp(client: AsyncClient, test_db_session: AsyncSession):
+    """last_reset_at is valid ISO8601 timestamp."""
+    await client.post("/api/timer", json={"duration": 60})
+    response = await client.get("/api/timer")
     data = response.json()
     
-    assert "facial_expression" in data
-    assert isinstance(data["facial_expression"], str)
-    assert len(data["facial_expression"]) > 0
+    last_reset_at = data["last_reset_at"]
+    assert last_reset_at is not None
+    datetime.fromisoformat(last_reset_at.replace("Z", "+00:00"))
 
 
 @pytest.mark.asyncio
-async def test_remaining_percent_in_urgency(test_client: AsyncClient):
-    """remaining_percent field is calculated correctly in UrgencyState."""
-    await test_client.post("/api/timer", json={"duration": 100})
-    response = await test_client.get("/api/urgency")
+async def test_configure_overwrites_previous(client: AsyncClient, test_db_session: AsyncSession):
+    """Configure timer overwrites previous duration."""
+    await client.post("/api/timer", json={"duration": 60})
+    response = await client.post("/api/timer", json={"duration": 120})
     data = response.json()
-    
-    assert "remaining_percent" in data
-    assert isinstance(data["remaining_percent"], (int, float))
-    assert 0.0 <= data["remaining_percent"] <= 1.0
+    assert data["duration"] == 120
+    assert data["countdown"] == 120
 
 
 @pytest.mark.asyncio
-async def test_last_reset_at_is_iso8601(test_client: AsyncClient):
-    """last_reset_at field is valid ISO8601 timestamp."""
-    await test_client.post("/api/timer", json={"duration": 60})
-    response = await test_client.get("/api/timer")
+async def test_pause_then_reset_maintains_duration(client: AsyncClient, test_db_session: AsyncSession):
+    """Reset after pause restores to configured duration."""
+    await client.post("/api/timer", json={"duration": 60})
+    await client.post("/api/timer/pause")
+    response = await client.post("/api/timer/reset")
     data = response.json()
-    
-    assert "last_reset_at" in data
-    try:
-        datetime.fromisoformat(data["last_reset_at"].replace("Z", "+00:00"))
-    except ValueError:
-        pytest.fail("last_reset_at is not valid ISO8601")
-
-
-@pytest.mark.asyncio
-async def test_reset_updates_last_reset_at(test_client: AsyncClient):
-    """Calling reset updates the last_reset_at timestamp."""
-    config_resp = await test_client.post("/api/timer", json={"duration": 60})
-    first_timestamp = config_resp.json()["last_reset_at"]
-    
-    reset_resp = await test_client.post("/api/timer/reset")
-    second_timestamp = reset_resp.json()["last_reset_at"]
-    
-    assert first_timestamp == second_timestamp or second_timestamp >= first_timestamp
-
-
-@pytest.mark.asyncio
-async def test_multiple_configure_calls_reset_duration(test_client: AsyncClient):
-    """Multiple POST /api/timer calls update duration independently."""
-    first = await test_client.post("/api/timer", json={"duration": 60})
-    assert first.json()["duration"] == 60
-    
-    second = await test_client.post("/api/timer", json={"duration": 120})
-    assert second.json()["duration"] == 120
-    assert second.json()["countdown"] == 120
-
-
-@pytest.mark.asyncio
-async def test_timer_reset_not_allowed_when_expired(test_client: AsyncClient):
-    """POST /api/timer/reset returns 400 when timer is expired."""
-    await test_client.post("/api/timer", json={"duration": 1})
-    
-    response = await test_client.post("/api/timer/reset")
-    if response.status_code == 400:
-        assert response.status_code == 400
-    else:
-        assert response.status_code == 200
+    assert data["countdown"] == 60
+    assert data["is_paused"] is False

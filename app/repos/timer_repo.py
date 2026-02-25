@@ -1,111 +1,95 @@
-from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
-
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from sqlalchemy.orm import Session
 from app.models.timer import Timer, TimerEvent
 
 
-class TimerRepository:
-    """Database CRUD operations for timer and timer_event tables."""
+class TimerRepo:
+    """Repository for timer data access."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, db: Session):
         """Initialize repository with database session."""
-        self.session = session
+        self.db = db
 
-    async def get_or_create_timer(self, timer_id: Optional[UUID] = None) -> Timer:
-        """Get existing timer or create default one if none exists."""
-        if timer_id:
-            stmt = select(Timer).where(Timer.id == timer_id)
-            result = await self.session.execute(stmt)
-            timer = result.scalar_one_or_none()
-            if timer:
-                return timer
-
-        stmt = select(Timer).limit(1)
-        result = await self.session.execute(stmt)
-        timer = result.scalar_one_or_none()
-
-        if not timer:
-            timer = Timer(
-                duration_seconds=60,
-                remaining_seconds=60,
-                status="stopped",
-            )
-            self.session.add(timer)
-            await self.session.flush()
-
+    def create_timer(
+        self,
+        duration_seconds: int,
+        name: str = "Workout",
+    ) -> Timer:
+        """Create a new timer."""
+        timer = Timer(
+            name=name,
+            duration_seconds=duration_seconds,
+            remaining_seconds=duration_seconds,
+            status="stopped",
+        )
+        self.db.add(timer)
+        self.db.commit()
+        self.db.refresh(timer)
         return timer
 
-    async def get_timer(self, timer_id: UUID) -> Optional[Timer]:
+    def get_timer(self, timer_id: UUID) -> Optional[Timer]:
         """Fetch timer by ID."""
-        stmt = select(Timer).where(Timer.id == timer_id)
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+        return self.db.query(Timer).filter(Timer.id == timer_id).first()
 
-    async def update_timer(
+    def list_timers(self) -> List[Timer]:
+        """Fetch all timers."""
+        return self.db.query(Timer).all()
+
+    def update_timer(
         self,
         timer_id: UUID,
-        duration_seconds: Optional[int] = None,
-        remaining_seconds: Optional[int] = None,
-        status: Optional[str] = None,
-        started_at: Optional[datetime] = None,
-        paused_at: Optional[datetime] = None,
+        remaining_seconds: int,
+        status: str,
+        started_at=None,
+        paused_at=None,
         reset_count: Optional[int] = None,
-        name: Optional[str] = None,
-    ) -> Timer:
-        """Update timer fields."""
-        timer = await self.get_timer(timer_id)
+    ) -> Optional[Timer]:
+        """Update timer state."""
+        timer = self.get_timer(timer_id)
         if not timer:
-            raise ValueError(f"Timer {timer_id} not found")
+            return None
 
-        if duration_seconds is not None:
-            timer.duration_seconds = duration_seconds
-        if remaining_seconds is not None:
-            timer.remaining_seconds = remaining_seconds
-        if status is not None:
-            timer.status = status
+        timer.remaining_seconds = remaining_seconds
+        timer.status = status
         if started_at is not None:
             timer.started_at = started_at
         if paused_at is not None:
             timer.paused_at = paused_at
         if reset_count is not None:
             timer.reset_count = reset_count
-        if name is not None:
-            timer.name = name
 
-        timer.updated_at = datetime.utcnow()
-        await self.session.flush()
+        self.db.commit()
+        self.db.refresh(timer)
         return timer
 
-    async def create_timer_event(
+    def delete_timer(self, timer_id: UUID) -> bool:
+        """Delete timer by ID."""
+        timer = self.get_timer(timer_id)
+        if not timer:
+            return False
+
+        self.db.delete(timer)
+        self.db.commit()
+        return True
+
+    def record_event(
         self,
         timer_id: UUID,
         event_type: str,
         urgency_level: int = 0,
     ) -> TimerEvent:
-        """Create a timer event log entry."""
+        """Record timer event."""
         event = TimerEvent(
             timer_id=timer_id,
             event_type=event_type,
             urgency_level=urgency_level,
         )
-        self.session.add(event)
-        await self.session.flush()
+        self.db.add(event)
+        self.db.commit()
+        self.db.refresh(event)
         return event
 
-    async def get_timer_events(self, timer_id: UUID) -> list[TimerEvent]:
+    def get_timer_events(self, timer_id: UUID) -> List[TimerEvent]:
         """Fetch all events for a timer."""
-        stmt = select(TimerEvent).where(TimerEvent.timer_id == timer_id).order_by(TimerEvent.recorded_at)
-        result = await self.session.execute(stmt)
-        return result.scalars().all()
-
-    async def commit(self) -> None:
-        """Commit pending transaction."""
-        await self.session.commit()
-
-    async def rollback(self) -> None:
-        """Rollback pending transaction."""
-        await self.session.rollback()
+        return self.db.query(TimerEvent).filter(TimerEvent.timer_id == timer_id).all()
