@@ -1,96 +1,99 @@
 import React from 'react';
 import { FacialState } from '../types';
-import { intensityToColour } from '../utils/colour';
-import './FaceComponent.css';
+import '../styles/FaceComponent.css';
 
 interface FaceComponentProps {
   facialState: FacialState;
-  colourIntensity: number;
+  urgencyLevel: number;
 }
 
 const FaceComponent: React.FC<FaceComponentProps> = ({
   facialState,
-  colourIntensity,
+  urgencyLevel,
 }) => {
-  const baseColour = intensityToColour(colourIntensity);
-
-  const getEyePattern = (): React.ReactNode => {
+  const getPixelPattern = (): string => {
     switch (facialState) {
-      case 'calm':
-        return (
-          <>
-            <div className="eye left-eye">
-              <div className="pupil" />
-            </div>
-            <div className="eye right-eye">
-              <div className="pupil" />
-            </div>
-          </>
-        );
+      case 'neutral':
+        return 'face-neutral';
       case 'anxious':
-        return (
-          <>
-            <div className="eye left-eye anxious">
-              <div className="pupil anxious" />
-            </div>
-            <div className="eye right-eye anxious">
-              <div className="pupil anxious" />
-            </div>
-          </>
-        );
-      case 'alarm':
-        return (
-          <>
-            <div className="eye left-eye alarm">
-              <div className="pupil alarm" />
-            </div>
-            <div className="eye right-eye alarm">
-              <div className="pupil alarm" />
-            </div>
-          </>
-        );
+        return 'face-anxious';
+      case 'panicked':
+        return 'face-panicked';
       case 'defeated':
-        return (
-          <>
-            <div className="eye left-eye defeated">
-              <div className="pupil defeated" />
-            </div>
-            <div className="eye right-eye defeated">
-              <div className="pupil defeated" />
-            </div>
-          </>
-        );
+        return 'face-defeated';
       default:
-        return null;
-    }
-  };
-
-  const getMouthPattern = (): React.ReactNode => {
-    switch (facialState) {
-      case 'calm':
-        return <div className="mouth calm" />;
-      case 'anxious':
-        return <div className="mouth anxious" />;
-      case 'alarm':
-        return <div className="mouth alarm" />;
-      case 'defeated':
-        return <div className="mouth defeated" />;
-      default:
-        return null;
+        return 'face-neutral';
     }
   };
 
   return (
-    <div
-      className="face-container"
-      style={{
-        '--face-colour': baseColour,
-      } as React.CSSProperties}
-    >
+    <div className={`face-container ${getPixelPattern()}`}>
       <div className="face-grid">
-        <div className="face-eyes">{getEyePattern()}</div>
-        <div className="face-mouth">{getMouthPattern()}</div>
+        <div className="face-eyes">
+          <div className={`eye left-eye ${facialState === 'defeated' ? 'eye-x' : ''}`}>
+            {facialState === 'defeated' ? (
+              <div className="pixel-x">
+                <span className="x-top-left"></span>
+                <span className="x-top-right"></span>
+                <span className="x-bottom-left"></span>
+                <span className="x-bottom-right"></span>
+              </div>
+            ) : (
+              <div className="pupil"></div>
+            )}
+          </div>
+          <div className={`eye right-eye ${facialState === 'defeated' ? 'eye-x' : ''}`}>
+            {facialState === 'defeated' ? (
+              <div className="pixel-x">
+                <span className="x-top-left"></span>
+                <span className="x-top-right"></span>
+                <span className="x-bottom-left"></span>
+                <span className="x-bottom-right"></span>
+              </div>
+            ) : (
+              <div className="pupil"></div>
+            )}
+          </div>
+        </div>
+
+        <div className="face-mouth">
+          {facialState === 'defeated' ? (
+            <div className="mouth-defeated">
+              <span className="pixel pixel-1"></span>
+              <span className="pixel pixel-2"></span>
+              <span className="pixel pixel-3"></span>
+              <span className="pixel pixel-4"></span>
+              <span className="pixel pixel-5"></span>
+            </div>
+          ) : facialState === 'panicked' ? (
+            <div className="mouth-o">
+              <span className="pixel pixel-1"></span>
+              <span className="pixel pixel-2"></span>
+              <span className="pixel pixel-3"></span>
+              <span className="pixel pixel-4"></span>
+            </div>
+          ) : facialState === 'anxious' ? (
+            <div className="mouth-worried">
+              <span className="pixel pixel-1"></span>
+              <span className="pixel pixel-2"></span>
+              <span className="pixel pixel-3"></span>
+            </div>
+          ) : (
+            <div className="mouth-smile">
+              <span className="pixel pixel-1"></span>
+              <span className="pixel pixel-2"></span>
+              <span className="pixel pixel-3"></span>
+            </div>
+          )}
+        </div>
       </div>
+
+      {facialState === 'defeated' && (
+        <div className="tear tear-left"></div>
+      )}
+      {facialState === 'defeated' && (
+        <div className="tear tear-right"></div>
+      )}
     </div>
   );
 };
