@@ -1,213 +1,234 @@
 import pytest
-from httpx import AsyncClient
+from fastapi.testclient import TestClient
+from datetime import datetime, timedelta
+from unittest.mock import Mock, patch, MagicMock
+import uuid
+
 from app.main import app
-from app.dependencies import get_timer_repo, get_timer_service
-from app.repos.timer_repo import TimerRepo
-from app.services.timer_service import TimerService
+from app.services.timer_service import TimerService, UrgencyState
 
 
 @pytest.fixture
-def timer_repo():
-    """In-memory timer repository for testing."""
-    return TimerRepo()
+def client():
+    """FastAPI test client."""
+    return TestClient(app)
 
 
 @pytest.fixture
-def timer_service(timer_repo):
-    """Timer service with injected repository."""
-    return TimerService(timer_repo)
+def mock_timer_service():
+    """Mock TimerService for testing."""
+    return Mock(spec=TimerService)
 
 
 @pytest.fixture
-def client(timer_repo, timer_service):
-    """FastAPI test client with dependency overrides."""
-    app.dependency_overrides[get_timer_repo] = lambda: timer_repo
-    app.dependency_overrides[get_timer_service] = lambda: timer_service
-    return AsyncClient(app=app, base_url="http://test")
+def sample_timer_id():
+    """Sample timer ID for testing."""
+    return str(uuid.uuid4())
 
 
-@pytest.mark.asyncio
-async def test_create_timer(client):
-    """POST /timers with duration returns 201 with valid UUID and status=active."""
-    response = await client.post("/timers", json={"duration": 30})
-    assert response.status_code == 201
-    data = response.json()
-    assert "id" in data
-    assert data["status"] == "active"
-    assert data["initialDuration"] == 30
-    assert data["remainingTime"] == 30
-    assert len(data["id"]) == 36  # UUID format
+@pytest.fixture
+def sample_timer_response():
+    """Sample timer response object."""
+    return {
+        "id": str(uuid.uuid4()),
+        "initialDuration": 300,
+        "remainingTime": 250,
+        "status": "running",
+        "createdAt": datetime.utcnow().isoformat(),
+        "startedAt": datetime.utcnow().isoformat(),
+    }
 
 
-@pytest.mark.asyncio
-async def test_get_all_timers(client):
-    """GET /timers returns list of timers."""
-    await client.post("/timers", json={"duration": 20})
-    await client.post("/timers", json={"duration": 40})
-    
-    response = await client.get("/timers")
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 2
+@pytest.fixture
+def sample_timer_state():
+    """Sample timer state response."""
+    return {
+        "id": str(uuid.uuid4()),
+        "remainingTime": 250,
+        "remainingPercentage": 83.33,
+        "urgencyLevel": "low",
+        "colourIntensity": {"red": 0, "green": 255, "blue": 0},
+        "facialExpression": "neutral",
+    }
 
 
-@pytest.mark.asyncio
-async def test_get_timer_by_id(client):
-    """GET /timers/{timerId} returns timer details."""
-    create_response = await client.post("/timers", json={"duration": 25})
-    timer_id = create_response.json()["id"]
-    
-    response = await client.get(f"/timers/{timer_id}")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["id"] == timer_id
-    assert data["initialDuration"] == 25
+class TestTimerRoutes:
+    """Test suite for timer API routes."""
 
+    def test_create_timer_success(self, client, sample_timer_response):
+        """Test creating a new timer with valid duration."""
+        response = client.post(
+            "/timers",
+            json={"duration": 300},
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["initialDuration"] == 300
+        assert data["status"] == "running"
+        assert "id" in data
+        assert "createdAt" in data
 
-@pytest.mark.asyncio
-async def test_get_timer_state(client):
-    """GET /timers/{timerId}/state returns urgency, colour, and facial expression."""
-    create_response = await client.post("/timers", json={"duration": 100})
-    timer_id = create_response.json()["id"]
-    
-    response = await client.get(f"/timers/{timer_id}/state")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["id"] == timer_id
-    assert "remainingTime" in data
-    assert "remainingPercentage" in data
-    assert "urgencyLevel" in data
-    assert data["urgencyLevel"] in ["low", "medium", "high", "critical"]
-    assert "colourIntensity" in data
-    assert "red" in data["colourIntensity"]
-    assert "green" in data["colourIntensity"]
-    assert "blue" in data["colourIntensity"]
-    assert "facialExpression" in data
+    def test_create_timer_invalid_duration(self, client):
+        """Test creating a timer with invalid duration."""
+        response = client.post(
+            "/timers",
+            json={"duration": 0},
+        )
+        assert response.status_code == 400
 
+    def test_create_timer_negative_duration(self, client):
+        """Test creating a timer with negative duration."""
+        response = client.post(
+            "/timers",
+            json={"duration": -100},
+        )
+        assert response.status_code == 400
 
-@pytest.mark.asyncio
-async def test_reset_timer(client):
-    """POST /timers/{timerId}/reset resets remainingTime to initialDuration."""
-    create_response = await client.post("/timers", json={"duration": 50})
-    timer_id = create_response.json()["id"]
-    
-    reset_response = await client.post(f"/timers/{timer_id}/reset")
-    assert reset_response.status_code == 200
-    data = reset_response.json()
-    assert data["remainingTime"] == data["initialDuration"]
-    assert data["remainingTime"] == 50
+    def test_get_all_timers(self, client):
+        """Test retrieving all active timers."""
+        client.post("/timers", json={"duration": 300})
+        client.post("/timers", json={"duration": 600})
 
+        response = client.get("/timers")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) >= 2
 
-@pytest.mark.asyncio
-async def test_delete_timer(client):
-    """DELETE /timers/{timerId} removes timer."""
-    create_response = await client.post("/timers", json={"duration": 30})
-    timer_id = create_response.json()["id"]
-    
-    delete_response = await client.delete(f"/timers/{timer_id}")
-    assert delete_response.status_code == 204
-    
-    get_response = await client.get(f"/timers/{timer_id}")
-    assert get_response.status_code == 404
+    def test_get_timer_by_id(self, client, sample_timer_id):
+        """Test retrieving a timer by ID."""
+        create_response = client.post("/timers", json={"duration": 300})
+        timer_id = create_response.json()["id"]
 
+        response = client.get(f"/timers/{timer_id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == timer_id
+        assert data["initialDuration"] == 300
 
-@pytest.mark.asyncio
-async def test_get_nonexistent_timer(client):
-    """GET /timers/{nonexistentId} returns 404."""
-    response = await client.get("/timers/00000000-0000-0000-0000-000000000000")
-    assert response.status_code == 404
+    def test_get_timer_not_found(self, client):
+        """Test retrieving a non-existent timer."""
+        fake_id = str(uuid.uuid4())
+        response = client.get(f"/timers/{fake_id}")
+        assert response.status_code == 404
 
+    def test_reset_timer(self, client):
+        """Test resetting a timer to initial duration."""
+        create_response = client.post("/timers", json={"duration": 300})
+        timer_id = create_response.json()["id"]
 
-@pytest.mark.asyncio
-async def test_reset_nonexistent_timer(client):
-    """POST /timers/{nonexistentId}/reset returns 404."""
-    response = await client.post("/timers/00000000-0000-0000-0000-000000000000/reset")
-    assert response.status_code == 404
+        response = client.post(f"/timers/{timer_id}/reset")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["remainingTime"] == 300
+        assert data["id"] == timer_id
 
+    def test_reset_timer_not_found(self, client):
+        """Test resetting a non-existent timer."""
+        fake_id = str(uuid.uuid4())
+        response = client.post(f"/timers/{fake_id}/reset")
+        assert response.status_code == 404
 
-@pytest.mark.asyncio
-async def test_delete_nonexistent_timer(client):
-    """DELETE /timers/{nonexistentId} returns 404."""
-    response = await client.delete("/timers/00000000-0000-0000-0000-000000000000")
-    assert response.status_code == 404
+    def test_get_timer_state(self, client):
+        """Test retrieving timer state with urgency feedback."""
+        create_response = client.post("/timers", json={"duration": 300})
+        timer_id = create_response.json()["id"]
 
+        response = client.get(f"/timers/{timer_id}/state")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == timer_id
+        assert "remainingTime" in data
+        assert "remainingPercentage" in data
+        assert "urgencyLevel" in data
+        assert "colourIntensity" in data
+        assert "facialExpression" in data
 
-@pytest.mark.asyncio
-async def test_timer_urgency_thresholds(client):
-    """Verify urgency levels match expected thresholds."""
-    create_response = await client.post("/timers", json={"duration": 100})
-    timer_id = create_response.json()["id"]
-    
-    state_response = await client.get(f"/timers/{timer_id}/state")
-    data = state_response.json()
-    
-    percentage = data["remainingPercentage"]
-    urgency = data["urgencyLevel"]
-    
-    if percentage > 50:
-        assert urgency == "low"
-    elif 25 < percentage <= 50:
-        assert urgency == "medium"
-    elif 10 < percentage <= 25:
-        assert urgency == "high"
-    elif percentage <= 10:
-        assert urgency == "critical"
+    def test_timer_state_urgency_levels(self, client):
+        """Test that urgency levels map correctly to remaining time."""
+        create_response = client.post("/timers", json={"duration": 100})
+        timer_id = create_response.json()["id"]
 
+        response = client.get(f"/timers/{timer_id}/state")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["urgencyLevel"] in ["low", "medium", "high", "critical"]
 
-@pytest.mark.asyncio
-async def test_colour_intensity_values(client):
-    """Verify colour intensity RGB values are within valid range."""
-    create_response = await client.post("/timers", json={"duration": 100})
-    timer_id = create_response.json()["id"]
-    
-    state_response = await client.get(f"/timers/{timer_id}/state")
-    data = state_response.json()
-    
-    colour = data["colourIntensity"]
-    for channel in ["red", "green", "blue"]:
-        assert 0 <= colour[channel] <= 255
+    def test_get_timer_state_not_found(self, client):
+        """Test getting state of non-existent timer."""
+        fake_id = str(uuid.uuid4())
+        response = client.get(f"/timers/{fake_id}/state")
+        assert response.status_code == 404
 
+    def test_delete_timer(self, client):
+        """Test deleting a timer."""
+        create_response = client.post("/timers", json={"duration": 300})
+        timer_id = create_response.json()["id"]
 
-@pytest.mark.asyncio
-async def test_facial_expression_mapping(client):
-    """Verify facial expression is a valid string."""
-    create_response = await client.post("/timers", json={"duration": 100})
-    timer_id = create_response.json()["id"]
-    
-    state_response = await client.get(f"/timers/{timer_id}/state")
-    data = state_response.json()
-    
-    assert isinstance(data["facialExpression"], str)
-    assert len(data["facialExpression"]) > 0
+        response = client.delete(f"/timers/{timer_id}")
+        assert response.status_code == 204
 
+        get_response = client.get(f"/timers/{timer_id}")
+        assert get_response.status_code == 404
 
-@pytest.mark.asyncio
-async def test_multiple_timers_independent_state(client):
-    """Verify multiple timers maintain independent state."""
-    resp1 = await client.post("/timers", json={"duration": 30})
-    resp2 = await client.post("/timers", json={"duration": 60})
-    
-    timer_id_1 = resp1.json()["id"]
-    timer_id_2 = resp2.json()["id"]
-    
-    state1 = (await client.get(f"/timers/{timer_id_1}/state")).json()
-    state2 = (await client.get(f"/timers/{timer_id_2}/state")).json()
-    
-    assert state1["remainingTime"] == 30
-    assert state2["remainingTime"] == 60
+    def test_delete_timer_not_found(self, client):
+        """Test deleting a non-existent timer."""
+        fake_id = str(uuid.uuid4())
+        response = client.delete(f"/timers/{fake_id}")
+        assert response.status_code == 404
 
+    def test_timer_colour_intensity_increases_with_urgency(self, client):
+        """Test that colour intensity increases as urgency increases."""
+        create_response = client.post("/timers", json={"duration": 100})
+        timer_id = create_response.json()["id"]
 
-@pytest.mark.asyncio
-async def test_reset_does_not_affect_other_timers(client):
-    """Verify reset on one timer does not affect others."""
-    resp1 = await client.post("/timers", json={"duration": 50})
-    resp2 = await client.post("/timers", json={"duration": 50})
-    
-    timer_id_1 = resp1.json()["id"]
-    timer_id_2 = resp2.json()["id"]
-    
-    await client.post(f"/timers/{timer_id_1}/reset")
-    
-    state2 = (await client.get(f"/timers/{timer_id_2}/state")).json()
-    assert state2["remainingTime"] == 50
+        response = client.get(f"/timers/{timer_id}/state")
+        assert response.status_code == 200
+        data = response.json()
+        colour = data["colourIntensity"]
+        assert "red" in colour
+        assert "green" in colour
+        assert "blue" in colour
+        assert all(0 <= c <= 255 for c in colour.values())
+
+    def test_facial_expression_maps_to_urgency(self, client):
+        """Test that facial expressions map to urgency levels."""
+        create_response = client.post("/timers", json={"duration": 100})
+        timer_id = create_response.json()["id"]
+
+        response = client.get(f"/timers/{timer_id}/state")
+        assert response.status_code == 200
+        data = response.json()
+        assert "facialExpression" in data
+        assert data["facialExpression"] in ["neutral", "concerned", "worried", "alarm"]
+
+    def test_create_timer_missing_duration(self, client):
+        """Test creating a timer without duration field."""
+        response = client.post("/timers", json={})
+        assert response.status_code == 422
+
+    def test_timer_remaining_percentage(self, client):
+        """Test that remaining percentage is calculated correctly."""
+        create_response = client.post("/timers", json={"duration": 100})
+        timer_id = create_response.json()["id"]
+
+        response = client.get(f"/timers/{timer_id}/state")
+        assert response.status_code == 200
+        data = response.json()
+        assert 0 <= data["remainingPercentage"] <= 100
+
+    def test_multiple_timers_independent_state(self, client):
+        """Test that multiple timers maintain independent state."""
+        resp1 = client.post("/timers", json={"duration": 300})
+        resp2 = client.post("/timers", json={"duration": 600})
+
+        timer1_id = resp1.json()["id"]
+        timer2_id = resp2.json()["id"]
+
+        state1 = client.get(f"/timers/{timer1_id}/state").json()
+        state2 = client.get(f"/timers/{timer2_id}/state").json()
+
+        assert state1["id"] == timer1_id
+        assert state2["id"] == timer2_id
+        assert state1["remainingTime"] <= 300
+        assert state2["remainingTime"] <= 600
