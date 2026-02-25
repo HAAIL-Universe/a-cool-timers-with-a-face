@@ -1,0 +1,543 @@
+.facial-avatar {
+  display: inline-block;
+  width: 160px;
+  height: 160px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  position: relative;
+}
+
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  grid-template-rows: repeat(16, 1fr);
+  width: 100%;
+  height: 100%;
+  gap: 0;
+  background-color: transparent;
+}
+
+.pixel {
+  width: 100%;
+  height: 100%;
+  transition: background-color 300ms ease-in-out;
+}
+
+/* Expression: CALM (urgencyLevel = 'low') */
+.avatar-calm {
+  background: linear-gradient(135deg, #222 0%, #444 100%);
+}
+
+.avatar-calm .pixel {
+  background-color: transparent;
+}
+
+/* Left eye (calm: open, neutral) - cols 4-7, rows 5-8 */
+.avatar-calm .pixel-row-5 {
+  &[data-col="4"],
+  &[data-col="5"],
+  &[data-col="6"],
+  &[data-col="7"] {
+    background-color: #00ff00;
+  }
+}
+
+.avatar-calm .pixel-row-6 {
+  &[data-col="4"] {
+    background-color: #00ff00;
+  }
+  &[data-col="5"],
+  &[data-col="6"] {
+    background-color: #00ff00;
+  }
+  &[data-col="7"] {
+    background-color: #00ff00;
+  }
+}
+
+.avatar-calm .pixel-row-7 {
+  &[data-col="4"],
+  &[data-col="5"],
+  &[data-col="6"],
+  &[data-col="7"] {
+    background-color: #00ff00;
+  }
+}
+
+.avatar-calm .pixel-row-8 {
+  &[data-col="4"],
+  &[data-col="5"],
+  &[data-col="6"],
+  &[data-col="7"] {
+    background-color: #00ff00;
+  }
+}
+
+/* Right eye (calm: open, neutral) - cols 9-12, rows 5-8 */
+.avatar-calm .pixel-row-5 {
+  &[data-col="9"],
+  &[data-col="10"],
+  &[data-col="11"],
+  &[data-col="12"] {
+    background-color: #00ff00;
+  }
+}
+
+.avatar-calm .pixel-row-6 {
+  &[data-col="9"],
+  &[data-col="10"],
+  &[data-col="11"],
+  &[data-col="12"] {
+    background-color: #00ff00;
+  }
+}
+
+.avatar-calm .pixel-row-7 {
+  &[data-col="9"],
+  &[data-col="10"],
+  &[data-col="11"],
+  &[data-col="12"] {
+    background-color: #00ff00;
+  }
+}
+
+.avatar-calm .pixel-row-8 {
+  &[data-col="9"],
+  &[data-col="10"],
+  &[data-col="11"],
+  &[data-col="12"] {
+    background-color: #00ff00;
+  }
+}
+
+/* Mouth (calm: happy) - cols 6-11, rows 11-13 */
+.avatar-calm .pixel-row-11 {
+  &[data-col="6"],
+  &[data-col="7"],
+  &[data-col="8"],
+  &[data-col="9"],
+  &[data-col="10"],
+  &[data-col="11"] {
+    background-color: #ffff00;
+  }
+}
+
+.avatar-calm .pixel-row-12 {
+  &[data-col="7"],
+  &[data-col="8"],
+  &[data-col="9"],
+  &[data-col="10"] {
+    background-color: #ffff00;
+  }
+}
+
+/* Expression: CONCERNED (urgencyLevel = 'medium') */
+.avatar-concerned {
+  background: linear-gradient(135deg, #333 0%, #555 100%);
+}
+
+.avatar-concerned .pixel {
+  background-color: transparent;
+}
+
+/* Left eye (concerned: wide, alert) - cols 4-7, rows 4-8 */
+.avatar-concerned .pixel-row-4 {
+  &[data-col="4"],
+  &[data-col="5"],
+  &[data-col="6"],
+  &[data-col="7"] {
+    background-color: #ffff00;
+  }
+}
+
+.avatar-concerned .pixel-row-5 {
+  &[data-col="4"],
+  &[data-col="7"] {
+    background-color: #ffff00;
+  }
+  &[data-col="5"],
+  &[data-col="6"] {
+    background-color: #ff8800;
+  }
+}
+
+.avatar-concerned .pixel-row-6 {
+  &[data-col="4"],
+  &[data-col="7"] {
+    background-color: #ffff00;
+  }
+  &[data-col="5"],
+  &[data-col="6"] {
+    background-color: #ff8800;
+  }
+}
+
+.avatar-concerned .pixel-row-7 {
+  &[data-col="4"],
+  &[data-col="5"],
+  &[data-col="6"],
+  &[data-col="7"] {
+    background-color: #ffff00;
+  }
+}
+
+.avatar-concerned .pixel-row-8 {
+  &[data-col="4"],
+  &[data-col="5"],
+  &[data-col="6"],
+  &[data-col="7"] {
+    background-color: #ffff00;
+  }
+}
+
+/* Right eye (concerned: wide, alert) - cols 9-12, rows 4-8 */
+.avatar-concerned .pixel-row-4 {
+  &[data-col="9"],
+  &[data-col="10"],
+  &[data-col="11"],
+  &[data-col="12"] {
+    background-color: #ffff00;
+  }
+}
+
+.avatar-concerned .pixel-row-5 {
+  &[data-col="9"],
+  &[data-col="12"] {
+    background-color: #ffff00;
+  }
+  &[data-col="10"],
+  &[data-col="11"] {
+    background-color: #ff8800;
+  }
+}
+
+.avatar-concerned .pixel-row-6 {
+  &[data-col="9"],
+  &[data-col="12"] {
+    background-color: #ffff00;
+  }
+  &[data-col="10"],
+  &[data-col="11"] {
+    background-color: #ff8800;
+  }
+}
+
+.avatar-concerned .pixel-row-7 {
+  &[data-col="9"],
+  &[data-col="10"],
+  &[data-col="11"],
+  &[data-col="12"] {
+    background-color: #ffff00;
+  }
+}
+
+.avatar-concerned .pixel-row-8 {
+  &[data-col="9"],
+  &[data-col="10"],
+  &[data-col="11"],
+  &[data-col="12"] {
+    background-color: #ffff00;
+  }
+}
+
+/* Mouth (concerned: neutral-frown) - cols 6-11, rows 11-13 */
+.avatar-concerned .pixel-row-11 {
+  &[data-col="6"],
+  &[data-col="11"] {
+    background-color: #ff8800;
+  }
+}
+
+.avatar-concerned .pixel-row-12 {
+  &[data-col="7"],
+  &[data-col="8"],
+  &[data-col="9"],
+  &[data-col="10"] {
+    background-color: #ff8800;
+  }
+}
+
+/* Expression: STRESSED (urgencyLevel = 'high') */
+.avatar-stressed {
+  background: linear-gradient(135deg, #444 0%, #666 100%);
+}
+
+.avatar-stressed .pixel {
+  background-color: transparent;
+}
+
+/* Left eye (stressed: closed/squinting) - cols 4-7, rows 5-8 */
+.avatar-stressed .pixel-row-5 {
+  &[data-col="4"],
+  &[data-col="5"],
+  &[data-col="6"],
+  &[data-col="7"] {
+    background-color: #ff8800;
+  }
+}
+
+.avatar-stressed .pixel-row-6 {
+  &[data-col="5"],
+  &[data-col="6"] {
+    background-color: #ff8800;
+  }
+}
+
+.avatar-stressed .pixel-row-7 {
+  &[data-col="4"],
+  &[data-col="5"],
+  &[data-col="6"],
+  &[data-col="7"] {
+    background-color: #ff8800;
+  }
+}
+
+.avatar-stressed .pixel-row-8 {
+  &[data-col="4"],
+  &[data-col="5"],
+  &[data-col="6"],
+  &[data-col="7"] {
+    background-color: #ff8800;
+  }
+}
+
+/* Right eye (stressed: closed/squinting) - cols 9-12, rows 5-8 */
+.avatar-stressed .pixel-row-5 {
+  &[data-col="9"],
+  &[data-col="10"],
+  &[data-col="11"],
+  &[data-col="12"] {
+    background-color: #ff8800;
+  }
+}
+
+.avatar-stressed .pixel-row-6 {
+  &[data-col="10"],
+  &[data-col="11"] {
+    background-color: #ff8800;
+  }
+}
+
+.avatar-stressed .pixel-row-7 {
+  &[data-col="9"],
+  &[data-col="10"],
+  &[data-col="11"],
+  &[data-col="12"] {
+    background-color: #ff8800;
+  }
+}
+
+.avatar-stressed .pixel-row-8 {
+  &[data-col="9"],
+  &[data-col="10"],
+  &[data-col="11"],
+  &[data-col="12"] {
+    background-color: #ff8800;
+  }
+}
+
+/* Mouth (stressed: open O-shape panic) - cols 6-11, rows 10-13 */
+.avatar-stressed .pixel-row-10 {
+  &[data-col="7"],
+  &[data-col="8"],
+  &[data-col="9"],
+  &[data-col="10"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-stressed .pixel-row-11 {
+  &[data-col="6"],
+  &[data-col="11"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-stressed .pixel-row-12 {
+  &[data-col="6"],
+  &[data-col="11"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-stressed .pixel-row-13 {
+  &[data-col="7"],
+  &[data-col="8"],
+  &[data-col="9"],
+  &[data-col="10"] {
+    background-color: #ff0000;
+  }
+}
+
+/* Expression: CRITICAL (urgencyLevel = 'critical') */
+.avatar-critical {
+  background: linear-gradient(135deg, #550000 0%, #880000 100%);
+  animation: pulse-critical 0.5s ease-in-out infinite;
+}
+
+.avatar-critical .pixel {
+  background-color: transparent;
+}
+
+/* Left eye (critical: extreme panic/X) - cols 4-7, rows 4-9 */
+.avatar-critical .pixel-row-4 {
+  &[data-col="4"],
+  &[data-col="7"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-critical .pixel-row-5 {
+  &[data-col="5"],
+  &[data-col="6"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-critical .pixel-row-6 {
+  &[data-col="5"],
+  &[data-col="6"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-critical .pixel-row-7 {
+  &[data-col="5"],
+  &[data-col="6"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-critical .pixel-row-8 {
+  &[data-col="5"],
+  &[data-col="6"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-critical .pixel-row-9 {
+  &[data-col="4"],
+  &[data-col="7"] {
+    background-color: #ff0000;
+  }
+}
+
+/* Right eye (critical: extreme panic/X) - cols 9-12, rows 4-9 */
+.avatar-critical .pixel-row-4 {
+  &[data-col="9"],
+  &[data-col="12"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-critical .pixel-row-5 {
+  &[data-col="10"],
+  &[data-col="11"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-critical .pixel-row-6 {
+  &[data-col="10"],
+  &[data-col="11"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-critical .pixel-row-7 {
+  &[data-col="10"],
+  &[data-col="11"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-critical .pixel-row-8 {
+  &[data-col="10"],
+  &[data-col="11"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-critical .pixel-row-9 {
+  &[data-col="9"],
+  &[data-col="12"] {
+    background-color: #ff0000;
+  }
+}
+
+/* Mouth (critical: panic scream O) - cols 6-11, rows 10-14 */
+.avatar-critical .pixel-row-10 {
+  &[data-col="7"],
+  &[data-col="8"],
+  &[data-col="9"],
+  &[data-col="10"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-critical .pixel-row-11 {
+  &[data-col="6"],
+  &[data-col="11"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-critical .pixel-row-12 {
+  &[data-col="6"],
+  &[data-col="11"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-critical .pixel-row-13 {
+  &[data-col="6"],
+  &[data-col="11"] {
+    background-color: #ff0000;
+  }
+}
+
+.avatar-critical .pixel-row-14 {
+  &[data-col="7"],
+  &[data-col="8"],
+  &[data-col="9"],
+  &[data-col="10"] {
+    background-color: #ff0000;
+  }
+}
+
+/* PULSE ANIMATIONS */
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes pulse-critical {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.avatar-pulsing {
+  animation: pulse 0.75s ease-in-out infinite;
+}
+
+.avatar-critical-flash {
+  animation: pulse-critical 0.5s ease-in-out infinite;
+}
+
+/* Apply pulse to face when critical */
+.facial-avatar.critical {
+  animation: pulse-critical 0.5s ease-in-out infinite;
+}
+
+.facial-avatar.pulsing {
+  animation: pulse 0.75s ease-in-out infinite;
+}
