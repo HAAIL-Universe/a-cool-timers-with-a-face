@@ -1,283 +1,295 @@
-# A cool timers with a Face
+# BLUEPRINT: A Cool Timer with a Face
 
-A real-time timer application with urgency-aware visual feedback, smooth animations, keyboard shortcuts, and a modern React frontend backed by a Python FastAPI server.
+> A retro 8-bit fitness countdown timer with urgency-driven colour and facial expression feedback — because every rep deserves a reaction.
 
-## Features
+---
 
-- **Urgency-Aware Colors**: Timer display changes color based on remaining time (safe → warning → critical)
-- **Critical Pulse Animation**: When urgency level is critical (<10% remaining), the background pulses visibly
-- **Smooth Transitions**: Color transitions between urgency zones are animated (500ms CSS transition)
-- **Keyboard Shortcuts**: 
-  - `Space` — Toggle start/pause
-  - `R` — Reset the timer
-- **Duration Presets**: Quick-select buttons for 15s, 30s, 45s, and 60s timers
-- **Responsive UI**: Works on desktop and mobile browsers
+## Overview
 
-## Prerequisites
+**BLUEPRINT** is a retro-styled fitness countdown timer that brings personality to your workout intervals. As time ticks down, the interface reacts: background colours shift from calm greens to urgent reds, and an 8-bit pixel avatar changes its facial expression to match the intensity of the moment — relaxed when you have plenty of time, stressed when the clock is almost up.
 
-- **Python 3.12+** (backend)
-- **Node.js 18+** (frontend)
-- **PostgreSQL 13+** (database)
-- **Docker & Docker Compose** (optional, for containerized deployment)
+### Who It's For
 
-## Local Development Setup
+- Fitness enthusiasts who want a more engaging interval timer
+- Developers looking for a clean FastAPI + React/TypeScript full-stack reference project
+- Anyone who thinks timers should have feelings
 
-### 1. Clone the Repository
+---
 
-```bash
-git clone <repository-url>
-cd a-cool-timers-with-a-face
+## Technology Stack
+
+| Layer | Technology | Notes |
+|---|---|---|
+| **Language (Backend)** | Python 3.11+ | Primary backend language |
+| **Backend Framework** | FastAPI | REST API, async-ready |
+| **Frontend Framework** | React 18+ | Component-based UI |
+| **Frontend Language** | TypeScript | Strict typing throughout |
+| **Build Tool** | Vite | Fast dev server and bundler |
+| **Styling** | CSS (custom) | Retro 8-bit aesthetic, CSS animations |
+| **Testing (Backend)** | pytest | Unit and integration tests |
+| **Testing (Frontend)** | Vitest / React Testing Library | Component and hook tests |
+| **Containerisation** | None | Runs directly on host |
+
+---
+
+## Architecture
+
+BLUEPRINT follows a clean three-layer architecture separated into two runtimes — a Python backend and a React frontend — communicating over a REST API.
+
+```
+┌─────────────────────────────────────────────┐
+│               React Frontend (web/)          │
+│                                             │
+│  TimerContainer                             │
+│  ├── FacialAvatar   (urgency expression)    │
+│  ├── TimerDisplay   (MM:SS countdown)       │
+│  ├── BackgroundBar  (colour urgency fill)   │
+│  ├── DurationSelector                       │
+│  ├── StartPauseButton                       │
+│  └── ResetButton                            │
+│                                             │
+│  Hooks: useTimer · useKeyboard              │
+│  API:   timerApi.ts  ──────────────────────►│
+└────────────────────────┬────────────────────┘
+                         │ HTTP REST
+┌────────────────────────▼────────────────────┐
+│               FastAPI Backend (app/)         │
+│                                             │
+│  routers/timers.py   (HTTP route handlers)  │
+│  services/timer_service.py  (business logic)│
+│  repos/timer_repo.py        (data access)   │
+│  models/timer.py            (Pydantic models│
+│  config.py                  (settings)      │
+│  dependencies.py            (DI wiring)     │
+└─────────────────────────────────────────────┘
 ```
 
-### 2. Backend Setup
+### Component Descriptions
 
-#### Create Python Virtual Environment
+| Component | Responsibility |
+|---|---|
+| `routers/timers.py` | HTTP endpoint definitions; thin layer delegating to services |
+| `services/timer_service.py` | Core timer business logic: create, tick, pause, reset |
+| `repos/timer_repo.py` | In-memory (or future persistent) timer state storage |
+| `models/timer.py` | Pydantic request/response schemas |
+| `config.py` | App-wide settings loaded from environment |
+| `dependencies.py` | FastAPI dependency injection providers |
+| `FacialAvatar.tsx` | 8-bit pixel face that reacts to remaining time percentage |
+| `BackgroundBar.tsx` | Full-width urgency colour bar (green → yellow → red) |
+| `useTimer.ts` | Client-side polling / countdown hook wired to the API |
+| `useKeyboard.ts` | Keyboard shortcut bindings (space to start/pause, `r` to reset) |
 
-```bash
-# macOS/Linux
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Windows (CMD)
-python -m venv .venv
-.venv\Scripts\activate.bat
-
-# Windows (PowerShell)
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
-#### Install Backend Dependencies
-
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-#### Configure Environment Variables
-
-Create a `.env` file at the project root with the following variables:
-
-```env
-DATABASE_URL=postgresql://user:password@localhost:5432/timers_db
-JWT_SECRET=your-secret-key-here-min-32-chars
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173
-```
-
-See [Environment Variables](#environment-variables) section below for details.
-
-#### Initialize Database
-
-```bash
-# Create the PostgreSQL database (if not already created)
-createdb timers_db
-
-# Run migrations (if applicable)
-python -c "from app.repos.db import init_db; init_db()"
-```
-
-#### Start Backend Server
-
-```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Backend API will be available at `http://localhost:8000`
-
-**API Documentation:** `http://localhost:8000/docs` (Swagger UI)
-
-### 3. Frontend Setup
-
-#### Install Node Dependencies
-
-```bash
-cd web
-npm install
-```
-
-#### Configure Frontend Environment
-
-Create a `.env` file in the `web/` directory:
-
-```env
-VITE_API_BASE_URL=http://localhost:8000
-```
-
-#### Start Frontend Development Server
-
-```bash
-npm run dev
-```
-
-Frontend will be available at `http://localhost:5173` (or the URL shown in terminal)
-
-#### Build Frontend for Production
-
-```bash
-npm run build
-```
-
-Output will be in `web/dist/`
-
-## Running Tests
-
-### Backend Tests
-
-```bash
-pytest -x
-```
-
-Run tests with verbose output:
-
-```bash
-pytest -xvs
-```
-
-### Frontend Tests
-
-```bash
-cd web
-npm test
-```
-
-Watch mode for frontend tests:
-
-```bash
-cd web
-npm test -- --watch
-```
+---
 
 ## Project Structure
 
 ```
 .
-├── README.md                 ← Project documentation (this file)
-├── requirements.txt          ← Python backend dependencies
-├── .env                      ← Environment variables (user-created)
-├── .env.example              ← Template for environment variables
-├── app/                      ← FastAPI backend
-│   ├── main.py              ← Application entry point
-│   ├── config.py            ← Settings & configuration
-│   ├── dependencies.py       ← FastAPI dependency injection
-│   ├── models/              ← Pydantic data models
-│   ├── routers/             ← API route handlers
-│   ├── services/            ← Business logic layer
-│   └── repos/               ← Data access layer
-├── tests/                    ← Backend tests
-├── web/                      ← React + TypeScript frontend
-│   ├── src/
-│   │   ├── App.tsx          ← Root React component
-│   │   ├── components/      ← Reusable React components
-│   │   ├── hooks/           ← Custom React hooks
-│   │   ├── styles/          ← CSS files
-│   │   └── services/        ← API client functions
-│   ├── public/              ← Static assets
-│   ├── package.json         ← Frontend dependencies
-│   ├── vite.config.ts       ← Vite build config
-│   └── tsconfig.json        ← TypeScript config
-└── Forge/                    ← Build governance (can be deleted post-build)
-    ├── Contracts/           ← Project specifications
-    └── evidence/            ← Build audit logs
+├── app/                        # FastAPI backend
+│   ├── main.py                 # Application entry point & CORS setup
+│   ├── config.py               # Environment-based configuration
+│   ├── dependencies.py         # Dependency injection
+│   ├── models/
+│   │   └── timer.py            # Pydantic timer models
+│   ├── repos/
+│   │   └── timer_repo.py       # Timer state repository
+│   ├── routers/
+│   │   └── timers.py           # /timers API routes
+│   └── services/
+│       └── timer_service.py    # Timer business logic
+│
+├── tests/                      # Backend test suite (pytest)
+│   ├── test_timer_service.py
+│   └── test_timers_router.py
+│
+├── web/                        # React/TypeScript frontend
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   └── src/
+│       ├── main.tsx            # React entry point
+│       ├── App.tsx             # Root application component
+│       ├── index.css           # Global base styles
+│       ├── animations.css      # Keyframe animations
+│       ├── api/
+│       │   └── timerApi.ts     # Typed API client
+│       ├── components/         # All UI components
+│       ├── hooks/              # useTimer, useKeyboard
+│       ├── types/
+│       │   └── timer.ts        # Shared TypeScript types
+│       └── tests/              # Frontend unit tests
+│
+├── .env.example                # Environment variable template
+├── requirements.txt            # Python dependencies
+└── forge_plan.json             # Project blueprint/plan
 ```
 
-## Environment Variables
+---
 
-| Variable | Required | Description | Example |
-|----------|----------|-------------|---------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/timers_db` |
-| `JWT_SECRET` | Yes | Secret key for JWT token signing (min 32 chars) | `your-super-secret-key-at-least-32-characters-long` |
-| `CORS_ORIGINS` | Yes | Comma-separated list of allowed CORS origins | `http://localhost:3000,http://localhost:5173` |
-| `VITE_API_BASE_URL` | Yes (frontend) | Backend API base URL for frontend | `http://localhost:8000` |
+## Setup & Installation
 
-## Running the Full Stack
+### Prerequisites
 
-### Option 1: Manual Start (Recommended for Development)
+- Python **3.11+**
+- Node.js **18+** and npm (or pnpm / yarn)
+- Git
 
-**Terminal 1 — Backend:**
+### 1. Clone the Repository
 
 ```bash
-source .venv/bin/activate  # or your platform's activation command
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+git clone <repository-url>
+cd blueprint
 ```
 
-**Terminal 2 — Frontend:**
+### 2. Backend Setup
+
+```bash
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Copy and configure environment variables
+cp .env.example .env
+# Edit .env with your values (see Environment Variables section)
+```
+
+### 3. Frontend Setup
+
+```bash
+cd web
+npm install
+cd ..
+```
+
+---
+
+## Usage / Running
+
+### Run the Backend (FastAPI)
+
+```bash
+# From the project root, with the virtual environment active
+uvicorn app.main:app --reload --port 8000
+```
+
+The API will be available at `http://localhost:8000`.  
+Interactive docs: `http://localhost:8000/docs`
+
+### Run the Frontend (React / Vite)
 
 ```bash
 cd web
 npm run dev
 ```
 
-### Option 2: Docker Compose (Production-like)
+The UI will be available at `http://localhost:5173` (Vite default).
+
+### Run Both Concurrently
+
+Open two terminal windows and run the backend and frontend commands above simultaneously. The frontend is pre-configured to proxy API requests to `http://localhost:8000`.
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and populate the values before running the application.
+
+| Variable | Description | Required |
+|---|---|---|
+| `APP_ENV` | Runtime environment (`development`, `production`) | Yes |
+| `ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins | Yes |
+| `API_HOST` | Host address for the FastAPI server | No |
+| `API_PORT` | Port for the FastAPI server | No |
+| `LOG_LEVEL` | Logging verbosity (`debug`, `info`, `warning`, `error`) | No |
+
+> **Never commit your `.env` file.** It is listed in `.gitignore` by default.
+
+---
+
+## API Routes
+
+Base URL: `http://localhost:8000`
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/timers` | List all active timers |
+| `POST` | `/timers` | Create a new timer |
+| `GET` | `/timers/{timer_id}` | Retrieve a specific timer's state |
+| `PATCH` | `/timers/{timer_id}/start` | Start or resume a timer |
+| `PATCH` | `/timers/{timer_id}/pause` | Pause a running timer |
+| `PATCH` | `/timers/{timer_id}/reset` | Reset a timer to its original duration |
+| `DELETE` | `/timers/{timer_id}` | Delete a timer |
+
+Full interactive API documentation is available via Swagger UI at `/docs` or ReDoc at `/redoc` when the backend is running.
+
+---
+
+## Testing
+
+### Backend Tests (pytest)
 
 ```bash
-docker-compose up --build
+# From the project root, with virtual environment active
+pytest tests/ -v
 ```
 
-Backend will run on `http://localhost:8000`, frontend on `http://localhost:3000`.
+```bash
+# With coverage report
+pytest tests/ -v --cov=app --cov-report=term-missing
+```
 
-## Troubleshooting
+Key test files:
 
-### Backend Issues
+| File | Coverage |
+|---|---|
+| `tests/test_timer_service.py` | Timer service business logic |
+| `tests/test_timers_router.py` | API endpoint integration tests |
 
-**"ModuleNotFoundError: No module named 'app'"**
-- Ensure you have activated the virtual environment: `. .venv/bin/activate`
-- Run `pip install -r requirements.txt` again
+### Frontend Tests (Vitest)
 
-**"psycopg2 compilation error"**
-- On macOS: `brew install libpq`
-- On Linux: `sudo apt-get install libpq-dev python3-dev`
-- Then retry: `pip install psycopg2-binary`
+```bash
+cd web
+npm run test
+```
 
-**"DATABASE_URL not found"**
-- Create `.env` file at project root with the required variables (see [Environment Variables](#environment-variables))
+```bash
+# Watch mode during development
+npm run test -- --watch
+```
 
-**PostgreSQL connection refused**
-- Verify PostgreSQL is running: `pg_isready -h localhost`
-- Check DATABASE_URL credentials and database name
-- Create database if needed: `createdb timers_db`
+Key test files:
 
-### Frontend Issues
+| File | Coverage |
+|---|---|
+| `web/src/tests/FacialAvatar.test.tsx` | Avatar expression rendering |
+| `web/src/tests/TimerDisplay.test.tsx` | Time formatting and display |
+| `web/src/tests/useKeyboard.test.ts` | Keyboard shortcut hook behaviour |
 
-**"VITE_API_BASE_URL is not set"**
-- Create `.env` file in `web/` directory (not at project root)
-- Set `VITE_API_BASE_URL=http://localhost:8000`
+---
 
-**"Cannot GET /api/timers"**
-- Verify backend is running on the configured API_BASE_URL
-- Check CORS_ORIGINS includes your frontend URL
+## Contributing
 
-**Tests fail with "Cannot find module"**
-- Run `npm install` again in the `web/` directory
-- Clear node_modules and reinstall: `rm -rf node_modules && npm install`
+Contributions are welcome! To get started:
 
-## Key Keyboard Shortcuts
+1. **Fork** the repository and create a feature branch (`git checkout -b feature/my-feature`)
+2. Make your changes, ensuring all existing tests pass
+3. Add tests for any new functionality
+4. Run the full test suite (backend + frontend) before submitting
+5. Open a **Pull Request** with a clear description of your changes
 
-- **Space** — Start/pause the timer
-- **R** — Reset the timer to initial duration
+Please follow existing code style conventions and keep commits focused and descriptive. For major changes, open an issue first to discuss the proposed approach.
 
-## API Endpoints (Backend)
-
-All endpoints are prefixed with `/api/timers`.
-
-- `POST /create` — Create a new timer
-- `GET /{timer_id}` — Fetch timer state
-- `POST /{timer_id}/start` — Start the timer
-- `POST /{timer_id}/stop` — Pause the timer
-- `POST /{timer_id}/reset` — Reset the timer
-
-For full API documentation, visit `http://localhost:8000/docs` when the backend is running.
-
-## Development Notes
-
-- Backend auto-reloads on file changes (thanks to `--reload` flag in `uvicorn`)
-- Frontend hot-reloads via Vite's dev server
-- Tests are deterministic and do not depend on live network calls
-- TypeScript is type-checked during the build process
+---
 
 ## License
 
-[Add license information here if applicable]
+This project is licensed under the **MIT License**.  
+See the [LICENSE](LICENSE) file for full details.
 
-## Support
+---
 
-For issues or questions, please open an issue on the repository.
+*Built with ❤️ and a pixel-art stress face.*
