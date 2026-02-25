@@ -1,0 +1,805 @@
+{
+  "stack": {
+    "auth": null,
+    "database": "postgresql",
+    "frontend": "react",
+    "test_framework": "pytest",
+    "llm_integration": null,
+    "backend_language": "python",
+    "backend_framework": "fastapi"
+  },
+  "phases": [
+    {
+      "name": "Backend Foundation \u2014 Timer API & In-Memory State",
+      "number": 0,
+      "purpose": "Stand up the FastAPI application with full in-memory timer state management, all physics-contract endpoints, urgency calculation logic, and the CORS/config layer needed for the frontend.",
+      "exemptions": [
+        "schema tables timer_sessions and timer_events are defined in schema contract but deferred \u2014 mini-build uses in-memory store only"
+      ],
+      "file_manifest": [
+        {
+          "path": "app/__init__.py",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Python package marker for the app module."
+        },
+        {
+          "path": "app/models/__init__.py",
+          "layer": "model",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker for models."
+        },
+        {
+          "path": "app/models/timer.py",
+          "layer": "model",
+          "action": "create",
+          "exports": [
+            "enum TimerStatus(str, Enum): active, paused, expired",
+            "enum UrgencyLevel(str, Enum): low, medium, high, critical",
+            "enum FacialExpression(str, Enum): calm, concerned, stressed, critical",
+            "class ColourIntensity(BaseModel): red: int, green: int, blue: int",
+            "class Timer(BaseModel): id: str, initial_seconds: int, remaining_seconds: int, status: TimerStatus, urgency_level: UrgencyLevel, started_at: datetime, last_reset_at: datetime, created_at: datetime",
+            "class TimerState(BaseModel): id: str, remaining_time: int, remaining_percentage: float, urgency_level: UrgencyLevel, colour_intensity: ColourIntensity, facial_expression: FacialExpression",
+            "class TimerCreateRequest(BaseModel): duration: int"
+          ],
+          "depends_on": [],
+          "description": "Pydantic models for Timer, TimerState, TimerCreateRequest and enums."
+        },
+        {
+          "path": "app/repos/__init__.py",
+          "layer": "repo",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker for repos."
+        },
+        {
+          "path": "app/repos/timer_repo.py",
+          "layer": "repo",
+          "action": "create",
+          "exports": [
+            "class TimerRepo.__init__(self)",
+            "def TimerRepo.create(self, timer: Timer) -> Timer",
+            "def TimerRepo.get(self, timer_id: str) -> Timer | None",
+            "def TimerRepo.list_all(self) -> list[Timer]",
+            "def TimerRepo.update(self, timer: Timer) -> Timer",
+            "def TimerRepo.delete(self, timer_id: str) -> bool"
+          ],
+          "depends_on": [
+            "app/models/timer.py"
+          ],
+          "description": "In-memory dictionary store for Timer objects; no DB calls."
+        },
+        {
+          "path": "app/services/__init__.py",
+          "layer": "service",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker for services."
+        },
+        {
+          "path": "app/services/timer_service.py",
+          "layer": "service",
+          "action": "create",
+          "exports": [
+            "class TimerService.__init__(self, repo: TimerRepo)",
+            "def TimerService.create_timer(self, duration: int) -> Timer",
+            "def TimerService.get_timer(self, timer_id: str) -> Timer",
+            "def TimerService.list_timers(self) -> list[Timer]",
+            "def TimerService.reset_timer(self, timer_id: str) -> Timer",
+            "def TimerService.delete_timer(self, timer_id: str) -> None",
+            "def TimerService.get_timer_state(self, timer_id: str) -> TimerState",
+            "def TimerService._calculate_urgency(self, remaining_pct: float) -> UrgencyLevel",
+            "def TimerService._calculate_colour(self, urgency: UrgencyLevel) -> ColourIntensity",
+            "def TimerService._calculate_expression(self, urgency: UrgencyLevel) -> FacialExpression",
+            "def TimerService._compute_remaining_seconds(self, timer: Timer) -> int"
+          ],
+          "depends_on": [
+            "app/models/timer.py",
+            "app/repos/timer_repo.py"
+          ],
+          "description": "Business logic: countdown tick, urgency calculation, colour/expression mapping, reset enforcement."
+        },
+        {
+          "path": "app/routers/__init__.py",
+          "layer": "router",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker for routers."
+        },
+        {
+          "path": "app/routers/timers.py",
+          "layer": "router",
+          "action": "create",
+          "exports": [
+            "router prefix: /timers",
+            "POST /timers \u2014 body: TimerCreateRequest \u2192 201 Timer",
+            "GET /timers \u2192 200 list[Timer]",
+            "GET /timers/{timer_id} \u2192 200 Timer",
+            "DELETE /timers/{timer_id} \u2192 204",
+            "POST /timers/{timer_id}/reset \u2192 200 Timer",
+            "GET /timers/{timer_id}/state \u2192 200 TimerState"
+          ],
+          "depends_on": [
+            "app/models/timer.py",
+            "app/services/timer_service.py"
+          ],
+          "description": "FastAPI router implementing all 6 physics-contract timer endpoints."
+        },
+        {
+          "path": "app/dependencies.py",
+          "layer": "config",
+          "action": "create",
+          "exports": [
+            "def get_timer_repo() -> TimerRepo",
+            "def get_timer_service() -> TimerService"
+          ],
+          "depends_on": [
+            "app/repos/timer_repo.py",
+            "app/services/timer_service.py"
+          ],
+          "description": "FastAPI dependency providers \u2014 singleton TimerRepo and TimerService instances."
+        },
+        {
+          "path": "app/config.py",
+          "layer": "config",
+          "action": "create",
+          "exports": [
+            "class Settings(BaseSettings): default_duration_seconds: int = 30, cors_origins: list[str] = ['http://localhost:5173']",
+            "def get_settings() -> Settings"
+          ],
+          "depends_on": [],
+          "description": "Pydantic Settings for environment variables: DEFAULT_DURATION_SECONDS, CORS_ORIGINS."
+        },
+        {
+          "path": "app/main.py",
+          "layer": "entrypoint",
+          "action": "create",
+          "exports": [
+            "app: FastAPI (mounts /timers router under prefix /timers)",
+            "CORS origins from Settings.cors_origins"
+          ],
+          "depends_on": [
+            "app/routers/timers.py",
+            "app/config.py"
+          ],
+          "description": "FastAPI app entrypoint: mounts timers router, configures CORS middleware."
+        },
+        {
+          "path": "requirements.txt",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Python dependencies: fastapi, uvicorn[standard], pydantic, pydantic-settings, pytest, httpx."
+        },
+        {
+          "path": ".env.example",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Example environment file with DEFAULT_DURATION_SECONDS and CORS_ORIGINS placeholders."
+        },
+        {
+          "path": "tests/__init__.py",
+          "layer": "test",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Test package marker."
+        },
+        {
+          "path": "tests/test_timer_service.py",
+          "layer": "test",
+          "action": "create",
+          "exports": [
+            "test_create_timer_returns_active_status",
+            "test_urgency_low_above_50_pct",
+            "test_urgency_medium_25_to_50_pct",
+            "test_urgency_high_10_to_25_pct",
+            "test_urgency_critical_below_10_pct",
+            "test_reset_timer_restores_initial_seconds",
+            "test_colour_green_at_low_urgency",
+            "test_colour_red_at_critical_urgency",
+            "test_expression_calm_at_low_urgency",
+            "test_expression_critical_at_critical_urgency"
+          ],
+          "depends_on": [
+            "app/services/timer_service.py",
+            "app/repos/timer_repo.py",
+            "app/models/timer.py"
+          ],
+          "description": "Unit tests for TimerService: create, reset, urgency thresholds, colour mapping, expression mapping."
+        },
+        {
+          "path": "tests/test_timers_router.py",
+          "layer": "test",
+          "action": "create",
+          "exports": [
+            "test_post_timers_creates_timer",
+            "test_get_timers_returns_list",
+            "test_get_timer_by_id",
+            "test_get_timer_by_id_not_found",
+            "test_delete_timer",
+            "test_post_reset_timer",
+            "test_get_timer_state_fields"
+          ],
+          "depends_on": [
+            "app/main.py",
+            "app/models/timer.py"
+          ],
+          "description": "Integration tests for all 6 timer endpoints using FastAPI TestClient."
+        }
+      ],
+      "wires_from_phase": null,
+      "acceptance_criteria": [
+        {
+          "id": "AC-0-1",
+          "test_hint": "Manual: run uvicorn, open http://localhost:8000/docs",
+          "description": "uvicorn app.main:app --reload starts without errors and /docs is accessible."
+        },
+        {
+          "id": "AC-0-2",
+          "test_hint": "tests/test_timers_router.py::test_post_timers_creates_timer",
+          "description": "POST /timers with {\"duration\": 30} returns 201 with a Timer object containing id, status='active', initial_seconds=30."
+        },
+        {
+          "id": "AC-0-3",
+          "test_hint": "tests/test_timers_router.py::test_get_timer_state_fields",
+          "description": "GET /timers/{id}/state returns urgency_level='low', facial_expression='calm', colour_intensity green-dominant when timer is fresh."
+        },
+        {
+          "id": "AC-0-4",
+          "test_hint": "tests/test_timer_service.py \u2014 all four urgency threshold tests",
+          "description": "Urgency thresholds are correct: >50% \u2192 low, 25-50% \u2192 medium, 10-25% \u2192 high, <10% \u2192 critical."
+        },
+        {
+          "id": "AC-0-5",
+          "test_hint": "tests/test_timers_router.py::test_post_reset_timer",
+          "description": "POST /timers/{id}/reset restores remaining_seconds to initial_seconds."
+        },
+        {
+          "id": "AC-0-6",
+          "test_hint": "Run: pytest -x",
+          "description": "pytest -x passes all backend tests with zero failures."
+        }
+      ],
+      "schema_tables_claimed": [
+        "timers"
+      ]
+    },
+    {
+      "name": "Frontend Foundation \u2014 React Timer UI with Urgency States",
+      "number": 1,
+      "purpose": "Scaffold the React + Vite + TypeScript frontend with all 6 UI components, real-time polling of the backend state endpoint, and the full 8-bit arcade visual system.",
+      "exemptions": [
+        "timer_sessions and timer_events tables claimed here for schema ownership but not persisted \u2014 mini-build defers DB to future phases"
+      ],
+      "file_manifest": [
+        {
+          "path": "web/package.json",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "NPM manifest with React, TypeScript, Vite, and Vitest dependencies."
+        },
+        {
+          "path": "web/vite.config.ts",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Vite config with React plugin and proxy /timers \u2192 http://localhost:8000."
+        },
+        {
+          "path": "web/tsconfig.json",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "TypeScript compiler config for React project."
+        },
+        {
+          "path": "web/index.html",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "HTML entrypoint mounting the React app root."
+        },
+        {
+          "path": "web/src/main.tsx",
+          "layer": "entrypoint",
+          "action": "create",
+          "exports": [],
+          "depends_on": [
+            "web/src/App.tsx"
+          ],
+          "description": "React DOM render entrypoint."
+        },
+        {
+          "path": "web/src/types/timer.ts",
+          "layer": "model",
+          "action": "create",
+          "exports": [
+            "type TimerStatus = 'active' | 'paused' | 'expired'",
+            "type UrgencyLevel = 'low' | 'medium' | 'high' | 'critical'",
+            "type FacialExpression = 'calm' | 'concerned' | 'stressed' | 'critical'",
+            "interface ColourIntensity { red: number; green: number; blue: number }",
+            "interface Timer { id: string; initialSeconds: number; remainingSeconds: number; status: TimerStatus; urgencyLevel: UrgencyLevel; startedAt: string; lastResetAt: string; createdAt: string }",
+            "interface TimerState { id: string; remainingTime: number; remainingPercentage: number; urgencyLevel: UrgencyLevel; colourIntensity: ColourIntensity; facialExpression: FacialExpression }"
+          ],
+          "depends_on": [],
+          "description": "TypeScript interfaces mirroring backend Pydantic models."
+        },
+        {
+          "path": "web/src/api/timerApi.ts",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "async function createTimer(duration: number): Promise<Timer>",
+            "async function listTimers(): Promise<Timer[]>",
+            "async function getTimer(timerId: string): Promise<Timer>",
+            "async function deleteTimer(timerId: string): Promise<void>",
+            "async function resetTimer(timerId: string): Promise<Timer>",
+            "async function getTimerState(timerId: string): Promise<TimerState>"
+          ],
+          "depends_on": [
+            "web/src/types/timer.ts"
+          ],
+          "description": "Typed fetch wrappers for all 6 backend timer endpoints."
+        },
+        {
+          "path": "web/src/hooks/useTimer.ts",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "interface UseTimerReturn { timer: Timer | null; timerState: TimerState | null; isRunning: boolean; createAndStart: (duration: number) => Promise<void>; reset: () => Promise<void>; isLoading: boolean; error: string | null }",
+            "function useTimer(): UseTimerReturn"
+          ],
+          "depends_on": [
+            "web/src/types/timer.ts",
+            "web/src/api/timerApi.ts"
+          ],
+          "description": "Custom React hook managing timer lifecycle, polling /state every 1s, and exposing start/pause/reset actions."
+        },
+        {
+          "path": "web/src/components/TimerDisplay.tsx",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "interface TimerDisplayProps { timeRemaining: number; urgencyLevel: UrgencyLevel }",
+            "function TimerDisplay(props: TimerDisplayProps): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/types/timer.ts"
+          ],
+          "description": "Large MM:SS countdown display with dynamic colour from urgency state."
+        },
+        {
+          "path": "web/src/components/FacialAvatar.tsx",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "interface FacialAvatarProps { expression: FacialExpression; urgencyLevel: UrgencyLevel; isPulsing: boolean }",
+            "function FacialAvatar(props: FacialAvatarProps): JSX.Element",
+            "const FACE_PIXELS: Record<FacialExpression, number[][]>"
+          ],
+          "depends_on": [
+            "web/src/types/timer.ts"
+          ],
+          "description": "16x16 grid LED-style 8-bit facial avatar rendering pixel art expressions per urgency state."
+        },
+        {
+          "path": "web/src/components/BackgroundBar.tsx",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "interface BackgroundBarProps { urgencyLevel: UrgencyLevel; isPulsing: boolean }",
+            "function BackgroundBar(props: BackgroundBarProps): JSX.Element",
+            "const URGENCY_COLOURS: Record<UrgencyLevel, string>"
+          ],
+          "depends_on": [
+            "web/src/types/timer.ts"
+          ],
+          "description": "Full-screen background colour component with smooth urgency transitions and critical-zone pulse animation."
+        },
+        {
+          "path": "web/src/components/ResetButton.tsx",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "interface ResetButtonProps { onClick: () => void; disabled: boolean }",
+            "function ResetButton(props: ResetButtonProps): JSX.Element"
+          ],
+          "depends_on": [],
+          "description": "Arcade-styled RESET button with active/disabled states."
+        },
+        {
+          "path": "web/src/components/StartPauseButton.tsx",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "interface StartPauseButtonProps { isRunning: boolean; onClick: () => void; disabled: boolean }",
+            "function StartPauseButton(props: StartPauseButtonProps): JSX.Element"
+          ],
+          "depends_on": [],
+          "description": "Arcade-styled START/PAUSE toggle button."
+        },
+        {
+          "path": "web/src/components/TimerContainer.tsx",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "interface TimerContainerProps { timerState: TimerState | null; isRunning: boolean; onReset: () => void; onStartPause: () => void; isLoading: boolean }",
+            "function TimerContainer(props: TimerContainerProps): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/components/TimerDisplay.tsx",
+            "web/src/components/FacialAvatar.tsx",
+            "web/src/components/BackgroundBar.tsx",
+            "web/src/components/ResetButton.tsx",
+            "web/src/components/StartPauseButton.tsx",
+            "web/src/types/timer.ts"
+          ],
+          "description": "Main layout wrapper composing all timer sub-components."
+        },
+        {
+          "path": "web/src/App.tsx",
+          "layer": "entrypoint",
+          "action": "create",
+          "exports": [
+            "function App(): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/hooks/useTimer.ts",
+            "web/src/components/TimerContainer.tsx",
+            "web/src/types/timer.ts"
+          ],
+          "description": "Root App component: wires useTimer hook to TimerContainer, handles duration setup."
+        },
+        {
+          "path": "web/src/index.css",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Global arcade CSS: monospace font stack, box-sizing reset, retro pixel-perfect rendering."
+        },
+        {
+          "path": "web/src/tests/TimerDisplay.test.tsx",
+          "layer": "test",
+          "action": "create",
+          "exports": [
+            "test renders 00:30 for 30 seconds",
+            "test applies green colour class at low urgency",
+            "test applies red colour class at critical urgency"
+          ],
+          "depends_on": [
+            "web/src/components/TimerDisplay.tsx"
+          ],
+          "description": "Vitest unit tests for TimerDisplay rendering urgency colours and MM:SS format."
+        },
+        {
+          "path": "web/src/tests/FacialAvatar.test.tsx",
+          "layer": "test",
+          "action": "create",
+          "exports": [
+            "test renders calm expression at low urgency",
+            "test renders critical expression at critical urgency",
+            "test applies pulsing class when isPulsing is true"
+          ],
+          "depends_on": [
+            "web/src/components/FacialAvatar.tsx"
+          ],
+          "description": "Vitest unit tests for FacialAvatar expression rendering."
+        }
+      ],
+      "wires_from_phase": 0,
+      "acceptance_criteria": [
+        {
+          "id": "AC-1-1",
+          "test_hint": "Manual: run npm run dev, check http://localhost:5173",
+          "description": "npm run dev in web/ starts Vite dev server on port 5173 without errors."
+        },
+        {
+          "id": "AC-1-2",
+          "test_hint": "Manual: visual check in browser",
+          "description": "App loads showing the timer interface with FacialAvatar, countdown display, START and RESET buttons."
+        },
+        {
+          "id": "AC-1-3",
+          "test_hint": "Manual: click START, observe countdown decrementing",
+          "description": "Clicking START creates a timer, begins countdown; display updates every second via polling."
+        },
+        {
+          "id": "AC-1-4",
+          "test_hint": "Manual: set a 20s timer, watch background colour change at 50%, 25%, 10% thresholds",
+          "description": "Background colour transitions green\u2192yellow\u2192orange\u2192red as countdown depletes through urgency thresholds."
+        },
+        {
+          "id": "AC-1-5",
+          "test_hint": "Manual: observe avatar during countdown",
+          "description": "Facial expression changes to match urgency level (calm\u2192concerned\u2192stressed\u2192critical)."
+        },
+        {
+          "id": "AC-1-6",
+          "test_hint": "Manual: press RESET mid-countdown",
+          "description": "RESET button restores timer to initial value and returns face/background to calm/green."
+        },
+        {
+          "id": "AC-1-7",
+          "test_hint": "Run: npm test in web/",
+          "description": "npm test in web/ runs Vitest tests with zero failures."
+        }
+      ],
+      "schema_tables_claimed": [
+        "timer_sessions",
+        "timer_events"
+      ]
+    },
+    {
+      "name": "Polish \u2014 Animations, Critical Pulse, Keyboard Controls & README",
+      "number": 2,
+      "purpose": "Add CSS animations (pulse in critical zone, smooth colour transitions), keyboard shortcuts (Space = toggle, R = reset), duration preset selector, and project README with run instructions.",
+      "exemptions": [],
+      "file_manifest": [
+        {
+          "path": "web/src/hooks/useKeyboard.ts",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "interface UseKeyboardOptions { onSpace: () => void; onR: () => void; enabled: boolean }",
+            "function useKeyboard(options: UseKeyboardOptions): void"
+          ],
+          "depends_on": [],
+          "description": "Custom hook wiring keydown events: Space \u2192 toggle start/pause, R \u2192 reset."
+        },
+        {
+          "path": "web/src/components/DurationSelector.tsx",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "const DURATION_PRESETS: number[]",
+            "interface DurationSelectorProps { selectedDuration: number; onSelect: (duration: number) => void; disabled: boolean }",
+            "function DurationSelector(props: DurationSelectorProps): JSX.Element"
+          ],
+          "depends_on": [],
+          "description": "Preset duration selector (15s, 30s, 45s, 60s) rendered in arcade button style."
+        },
+        {
+          "path": "web/src/components/TimerContainer.tsx",
+          "layer": "infrastructure",
+          "action": "modify",
+          "exports": [
+            "interface TimerContainerProps { timerState: TimerState | null; isRunning: boolean; onReset: () => void; onStartPause: () => void; onDurationSelect: (d: number) => void; selectedDuration: number; isLoading: boolean }",
+            "function TimerContainer(props: TimerContainerProps): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/components/DurationSelector.tsx",
+            "web/src/hooks/useKeyboard.ts",
+            "web/src/components/TimerDisplay.tsx",
+            "web/src/components/FacialAvatar.tsx",
+            "web/src/components/BackgroundBar.tsx",
+            "web/src/components/ResetButton.tsx",
+            "web/src/components/StartPauseButton.tsx"
+          ],
+          "description": "Add DurationSelector and wire useKeyboard hook; pass selectedDuration to App."
+        },
+        {
+          "path": "web/src/animations.css",
+          "layer": "config",
+          "action": "create",
+          "exports": [
+            "@keyframes criticalPulse \u2014 opacity 0.5s oscillation",
+            "@keyframes bgTransition \u2014 500ms background-color ease",
+            ".pulse-critical \u2014 applies criticalPulse animation",
+            ".face-transition \u2014 200ms ease-in-out opacity transition"
+          ],
+          "depends_on": [],
+          "description": "CSS keyframe animations: pulse for critical zone (0.5s cycle), smooth colour transition classes, face expression fade."
+        },
+        {
+          "path": "web/src/components/BackgroundBar.tsx",
+          "layer": "infrastructure",
+          "action": "modify",
+          "exports": [
+            "interface BackgroundBarProps { urgencyLevel: UrgencyLevel; isPulsing: boolean }",
+            "function BackgroundBar(props: BackgroundBarProps): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/animations.css",
+            "web/src/types/timer.ts"
+          ],
+          "description": "Apply animations.css pulse class in critical zone; use CSS transition for smooth colour shifts."
+        },
+        {
+          "path": "web/src/components/FacialAvatar.tsx",
+          "layer": "infrastructure",
+          "action": "modify",
+          "exports": [
+            "interface FacialAvatarProps { expression: FacialExpression; urgencyLevel: UrgencyLevel; isPulsing: boolean }",
+            "function FacialAvatar(props: FacialAvatarProps): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/animations.css",
+            "web/src/types/timer.ts"
+          ],
+          "description": "Apply face-transition CSS class and accelerating pulse on critical expression."
+        },
+        {
+          "path": "web/src/App.tsx",
+          "layer": "entrypoint",
+          "action": "modify",
+          "exports": [
+            "function App(): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/hooks/useTimer.ts",
+            "web/src/components/TimerContainer.tsx"
+          ],
+          "description": "Add selectedDuration state, pass onDurationSelect to TimerContainer, wire to useTimer.createAndStart."
+        },
+        {
+          "path": "web/src/tests/useKeyboard.test.ts",
+          "layer": "test",
+          "action": "create",
+          "exports": [
+            "test space key triggers onSpace callback",
+            "test r key triggers onR callback",
+            "test disabled option suppresses callbacks"
+          ],
+          "depends_on": [
+            "web/src/hooks/useKeyboard.ts"
+          ],
+          "description": "Vitest tests for useKeyboard hook: space fires onSpace, R fires onR, disabled blocks events."
+        },
+        {
+          "path": "README.md",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Project README with prerequisites, local dev run instructions for backend and frontend, and env var table."
+        }
+      ],
+      "wires_from_phase": 1,
+      "acceptance_criteria": [
+        {
+          "id": "AC-2-1",
+          "test_hint": "Manual: set 10s timer, let it reach <1s, observe pulse animation",
+          "description": "Background pulses visibly when urgency_level is 'critical' (<10% remaining)."
+        },
+        {
+          "id": "AC-2-2",
+          "test_hint": "Manual: set 20s timer, watch colour change at threshold crossings",
+          "description": "Colour transitions between urgency zones are smooth (500ms CSS transition, not instantaneous)."
+        },
+        {
+          "id": "AC-2-3",
+          "test_hint": "Manual: press Space and R during countdown",
+          "description": "Spacebar toggles start/pause; R key resets the timer."
+        },
+        {
+          "id": "AC-2-4",
+          "test_hint": "Manual: select 60s, press START, verify initial countdown is 60s",
+          "description": "Duration preset buttons (15s, 30s, 45s, 60s) appear and selecting one updates the next timer's duration."
+        },
+        {
+          "id": "AC-2-5",
+          "test_hint": "Run: npm test in web/",
+          "description": "npm test in web/ passes all tests including new useKeyboard tests."
+        },
+        {
+          "id": "AC-2-6",
+          "test_hint": "Manual: read README.md and verify instructions are complete and accurate",
+          "description": "README.md contains complete local dev setup instructions for both backend and frontend."
+        }
+      ],
+      "schema_tables_claimed": []
+    }
+  ],
+  "summary": {
+    "mode": "greenfield",
+    "one_liner": "A retro 8-bit fitness countdown timer with urgency-driven colour and facial expression feedback, built on FastAPI + React/TypeScript.",
+    "key_constraints": [
+      "MINI-BUILD: no auth, no user management, no Docker \u2014 public unauthenticated endpoints only",
+      "No database persistence \u2014 timer state is in-memory (Python dict store); reset on server restart is acceptable per blueprint",
+      "Colour intensity must increase monotonically as remaining time decreases (blueprint invariant)",
+      "Facial expressions must map synchronously to urgency states (blueprint invariant)",
+      "Reset-before-expiry mechanic must be enforced \u2014 timer can be reset at any time including after expiry",
+      "Routers must not import repos directly \u2014 service layer required (boundaries contract)",
+      "Frontend polls /timers/{id}/state every second for real-time urgency feedback (physics contract)",
+      "All 5 physics endpoints must be implemented: POST /timers, GET /timers, GET /timers/{id}, DELETE /timers/{id}, POST /timers/{id}/reset, GET /timers/{id}/state",
+      "Schema tables (timers, timer_sessions, timer_events) are defined but NOT used in mini-build \u2014 in-memory store replaces DB",
+      "Frontend lives in web/ directory per forge.json"
+    ],
+    "stack_rationale": "FastAPI provides a lightweight, zero-ceremony backend ideal for in-memory session state and a small REST surface. React + Vite with TypeScript delivers the responsive, animation-rich 8-bit UI with tight component-level state control. No database is used because the blueprint explicitly mandates session-only (in-memory) persistence for the MVP.",
+    "missing_contracts": [],
+    "existing_contracts": [
+      "blueprint.md",
+      "stack.md",
+      "schema.md",
+      "manifesto.md",
+      "physics.yaml",
+      "boundaries.json",
+      "ui.md"
+    ],
+    "boot_script_required": false
+  },
+  "metadata": {
+    "generated_at": "2026-02-25T04:21:41.149500+00:00",
+    "project_name": "timers-with-a-face",
+    "planner_model": "claude-sonnet-4-6",
+    "schema_version": "1.0"
+  },
+  "contract_refs": [
+    {
+      "note": "Colour monotonic increase, expression sync with urgency, reset-before-expiry mechanic \u2014 all enforced in TimerService",
+      "section": "Core Invariants",
+      "contract": "blueprint.md"
+    },
+    {
+      "note": "TimerService owns urgency calculation; in-memory repo replaces DB; React polls /state",
+      "section": "Layer Boundaries",
+      "contract": "blueprint.md"
+    },
+    {
+      "note": "All 6 endpoints (POST /timers, GET /timers, GET/DELETE /timers/{id}, POST /timers/{id}/reset, GET /timers/{id}/state) implemented in Phase 0 router",
+      "section": "paths",
+      "contract": "physics.yaml"
+    },
+    {
+      "note": "TimerState model fields (remainingTime, remainingPercentage, urgencyLevel, colourIntensity, facialExpression) directly map to Pydantic model and TypeScript interface",
+      "section": "components/schemas/TimerState",
+      "contract": "physics.yaml"
+    },
+    {
+      "note": "Routers forbidden from importing repos directly; services forbidden from FastAPI Request/Response \u2014 enforced by dependency injection pattern",
+      "section": "layers",
+      "contract": "boundaries.json"
+    },
+    {
+      "note": "All 6 specified components (TimerDisplay, FacialAvatar, BackgroundBar, ResetButton, StartPauseButton, TimerContainer) implemented in Phase 1",
+      "section": "3. Component List",
+      "contract": "ui.md"
+    },
+    {
+      "note": "Arcade colours #00FF00 / #FFFF00 / #FF8800 / #FF0000 used in BackgroundBar and URGENCY_COLOURS constant",
+      "section": "4. Visual Style / Color Palette",
+      "contract": "ui.md"
+    },
+    {
+      "note": "500ms colour transitions, 200-300ms face transitions, 0.5-1s pulse cycle in critical zone \u2014 all implemented in Phase 2 animations.css",
+      "section": "4. Visual Style / Animations",
+      "contract": "ui.md"
+    },
+    {
+      "note": "timer_status and urgency_level enums mirrored in Python Enum classes and TypeScript union types",
+      "section": "Enums",
+      "contract": "schema.md"
+    },
+    {
+      "note": "FacialAvatar uses 16x16 pixel grid with 2-3 colours per expression \u2014 pixel art defined as FACE_PIXELS constant",
+      "section": "3. LED 8-Bit Aesthetic",
+      "contract": "manifesto.md"
+    }
+  ],
+  "required_contracts": [
+    "blueprint.md",
+    "stack.md",
+    "physics.yaml",
+    "boundaries.json",
+    "ui.md",
+    "schema.md",
+    "manifesto.md"
+  ]
+}
