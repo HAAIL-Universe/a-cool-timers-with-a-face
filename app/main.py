@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import timers
-from app.config import get_settings
 
-app = FastAPI(title="A cool timers with a Face", version="0.1.0")
+from app.config import get_settings
+from app.routers import timer
 
 settings = get_settings()
+
+app = FastAPI(title="A cool timers with a Face")
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,10 +16,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(timers.router)
+app.include_router(timer.router, prefix="/api/timer", tags=["timer"])
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
+def health_check() -> dict[str, str]:
     """Health check endpoint."""
     return {"status": "ok"}

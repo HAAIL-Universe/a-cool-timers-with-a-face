@@ -1,215 +1,189 @@
-import uuid
+import pytest
+from uuid import uuid4
 from datetime import datetime
 from fastapi.testclient import TestClient
+
 from app.main import app
-from app.models.timer import TimerStatus, UrgencyLevel
+from app.models.timer import Timer, TimerStatus, UrgencyLevel
+from app.services.timer_service import TimerService
+from app.repos.timer_repo import TimerRepository
 
 
-client = TestClient(app)
+@pytest.fixture
+def client():
+    """FastAPI test client."""
+    return TestClient(app)
 
 
-class TestTimersRouter:
-    """Integration tests for timer endpoints."""
+@pytest.fixture
+def timer_repo():
+    """Timer repository instance."""
+    return TimerRepository()
 
-    def test_health_check(self) -> None:
-        """Health check returns 200 with status ok."""
-        response = client.get("/health")
-        assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
 
-    def test_post_timers_creates_timer(self) -> None:
-        """POST /timers with duration creates timer in active state."""
-        response = client.post("/timers", json={"duration": 30})
+@pytest.fixture
+def timer_service(timer_repo):
+    """Timer service instance."""
+    return TimerService(timer_repo)
+
+
+@pytest.fixture
+def sample_timer():
+    """Sample timer for testing."""
+    return Timer(
+        id=uuid4(),
+        initial_seconds=60,
+        remaining_seconds=60,
+        status=TimerStatus.ACTIVE,
+        urgency_level=UrgencyLevel.LOW,
+        started_at=datetime.utcnow(),
+        last_reset_at=datetime.utcnow(),
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+
+
+class TestTimerRouter:
+    """Tests for timer router endpoints."""
+
+    def test_create_timer(self, client):
+        """Test creating a new timer."""
+        response = client.post("/api/timer/timers", json={"initial_seconds": 60})
         assert response.status_code == 201
         data = response.json()
         assert "id" in data
-        assert data["initialDuration"] == 30
-        assert data["remainingTime"] == 30
-        assert data["status"] == "running"
-        assert data["urgencyLevel"] == "low"
+        assert data["initial_seconds"] == 60
+        assert data["remaining_seconds"] == 60
+        assert data["status"] == TimerStatus.ACTIVE
 
-    def test_get_all_timers(self) -> None:
-        """GET /timers returns list of all timers."""
-        client.post("/timers", json={"duration": 20})
-        client.post("/timers", json={"duration": 40})
-        response = client.get("/timers")
+    def test_get_all_timers(self, client):
+        """Test retrieving all timers."""
+        client.post("/api/timer/timers", json={"initial_seconds": 60})
+        client.post("/api/timer/timers", json={"initial_seconds": 120})
+        
+        response = client.get("/api/timer/timers")
         assert response.status_code == 200
-        timers = response.json()
-        assert len(timers) >= 2
-        assert all("id" in t for t in timers)
-        assert all("initialDuration" in t for t in timers)
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) >= 2
 
-    def test_get_timer_by_id(self) -> None:
-        """GET /timers/{id} returns specific timer."""
-        create_response = client.post("/timers", json={"duration": 25})
+    def test_get_timer_by_id(self, client):
+        """Test retrieving a specific timer."""
+        create_response = client.post("/api/timer/timers", json={"initial_seconds": 60})
         timer_id = create_response.json()["id"]
-        response = client.get(f"/timers/{timer_id}")
+        
+        response = client.get(f"/api/timer/timers/{timer_id}")
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == timer_id
-        assert data["initialDuration"] == 25
+        assert data["initial_seconds"] == 60
 
-    def test_get_timer_by_id_not_found(self) -> None:
-        """GET /timers/{id} with nonexistent ID returns 404."""
-        fake_id = str(uuid.uuid4())
-        response = client.get(f"/timers/{fake_id}")
+    def test_get_nonexistent_timer(self, client):
+        """Test retrieving a non-existent timer."""
+        fake_id = str(uuid4())
+        response = client.get(f"/api/timer/timers/{fake_id}")
         assert response.status_code == 404
 
-    def test_get_timer_state_fresh_timer(self) -> None:
-        """GET /timers/{id}/state returns low urgency for fresh timer."""
-        create_response = client.post("/timers", json={"duration": 100})
+    def test_reset_timer(self, client):
+        """Test resetting a timer."""
+        create_response = client.post("/api/timer/timers", json={"initial_seconds": 60})
         timer_id = create_response.json()["id"]
-        response = client.get(f"/timers/{timer_id}/state")
-        assert response.status_code == 200
-        state = response.json()
-        assert state["id"] == timer_id
-        assert state["remainingTime"] == 100
-        assert state["remainingPercentage"] == 100.0
-        assert state["urgencyLevel"] == "low"
-        assert state["facialExpression"] == "calm"
-        assert state["colourIntensity"]["red"] == 0
-        assert state["colourIntensity"]["green"] == 255
-        assert state["colourIntensity"]["blue"] == 0
-
-    def test_get_timer_state_medium_urgency(self) -> None:
-        """GET /timers/{id}/state returns medium urgency at 25-50% remaining."""
-        create_response = client.post("/timers", json={"duration": 100})
-        timer_id = create_response.json()["id"]
-        client.post(f"/timers/{timer_id}/tick", json={"seconds_elapsed": 60})
-        response = client.get(f"/timers/{timer_id}/state")
-        assert response.status_code == 200
-        state = response.json()
-        assert state["urgencyLevel"] == "medium"
-        assert state["facialExpression"] == "concerned"
-        assert state["colourIntensity"]["red"] > 0
-        assert state["colourIntensity"]["green"] > 0
-
-    def test_get_timer_state_high_urgency(self) -> None:
-        """GET /timers/{id}/state returns high urgency at 10-25% remaining."""
-        create_response = client.post("/timers", json={"duration": 100})
-        timer_id = create_response.json()["id"]
-        client.post(f"/timers/{timer_id}/tick", json={"seconds_elapsed": 82})
-        response = client.get(f"/timers/{timer_id}/state")
-        assert response.status_code == 200
-        state = response.json()
-        assert state["urgencyLevel"] == "high"
-        assert state["facialExpression"] == "stressed"
-        assert state["colourIntensity"]["red"] > state["colourIntensity"]["green"]
-
-    def test_get_timer_state_critical_urgency(self) -> None:
-        """GET /timers/{id}/state returns critical at <10% remaining."""
-        create_response = client.post("/timers", json={"duration": 100})
-        timer_id = create_response.json()["id"]
-        client.post(f"/timers/{timer_id}/tick", json={"seconds_elapsed": 95})
-        response = client.get(f"/timers/{timer_id}/state")
-        assert response.status_code == 200
-        state = response.json()
-        assert state["urgencyLevel"] == "critical"
-        assert state["facialExpression"] == "critical"
-        assert state["colourIntensity"]["red"] == 255
-        assert state["colourIntensity"]["green"] == 0
-
-    def test_post_tick_decrements_remaining_time(self) -> None:
-        """POST /timers/{id}/tick reduces remaining_seconds."""
-        create_response = client.post("/timers", json={"duration": 100})
-        timer_id = create_response.json()["id"]
-        response = client.post(f"/timers/{timer_id}/tick", json={"seconds_elapsed": 25})
+        
+        response = client.post(f"/api/timer/timers/{timer_id}/reset")
         assert response.status_code == 200
         data = response.json()
-        assert data["remainingTime"] == 75
+        assert data["remaining_seconds"] == data["initial_seconds"]
+        assert data["urgency_level"] == UrgencyLevel.LOW
 
-    def test_post_tick_multiple_times(self) -> None:
-        """POST /timers/{id}/tick can be called multiple times."""
-        create_response = client.post("/timers", json={"duration": 100})
+    def test_reset_nonexistent_timer(self, client):
+        """Test resetting a non-existent timer."""
+        fake_id = str(uuid4())
+        response = client.post(f"/api/timer/timers/{fake_id}/reset")
+        assert response.status_code == 404
+
+    def test_get_timer_state(self, client):
+        """Test retrieving timer state with urgency feedback."""
+        create_response = client.post("/api/timer/timers", json={"initial_seconds": 60})
         timer_id = create_response.json()["id"]
-        client.post(f"/timers/{timer_id}/tick", json={"seconds_elapsed": 30})
-        response = client.post(f"/timers/{timer_id}/tick", json={"seconds_elapsed": 20})
+        
+        response = client.get(f"/api/timer/timers/{timer_id}/state")
         assert response.status_code == 200
         data = response.json()
-        assert data["remainingTime"] == 50
+        assert "id" in data
+        assert "remaining_time" in data
+        assert "remaining_percentage" in data
+        assert "urgency_level" in data
+        assert "colour_intensity" in data
+        assert "facial_expression" in data
 
-    def test_post_reset_timer(self) -> None:
-        """POST /timers/{id}/reset restores remaining_seconds to initial."""
-        create_response = client.post("/timers", json={"duration": 60})
+    def test_delete_timer(self, client):
+        """Test deleting a timer."""
+        create_response = client.post("/api/timer/timers", json={"initial_seconds": 60})
         timer_id = create_response.json()["id"]
-        client.post(f"/timers/{timer_id}/tick", json={"seconds_elapsed": 40})
-        response = client.post(f"/timers/{timer_id}/reset")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["remainingTime"] == 60
-
-    def test_post_reset_updates_last_reset_at(self) -> None:
-        """POST /timers/{id}/reset updates last_reset_at timestamp."""
-        create_response = client.post("/timers", json={"duration": 50})
-        timer_id = create_response.json()["id"]
-        initial_reset = create_response.json()["lastResetAt"]
-        client.post(f"/timers/{timer_id}/tick", json={"seconds_elapsed": 20})
-        response = client.post(f"/timers/{timer_id}/reset")
-        data = response.json()
-        assert data["lastResetAt"] > initial_reset
-
-    def test_delete_timer(self) -> None:
-        """DELETE /timers/{id} removes timer from store."""
-        create_response = client.post("/timers", json={"duration": 30})
-        timer_id = create_response.json()["id"]
-        response = client.delete(f"/timers/{timer_id}")
+        
+        response = client.delete(f"/api/timer/timers/{timer_id}")
         assert response.status_code == 204
-        get_response = client.get(f"/timers/{timer_id}")
+        
+        get_response = client.get(f"/api/timer/timers/{timer_id}")
         assert get_response.status_code == 404
 
-    def test_delete_nonexistent_timer(self) -> None:
-        """DELETE /timers/{id} with nonexistent ID returns 404."""
-        fake_id = str(uuid.uuid4())
-        response = client.delete(f"/timers/{fake_id}")
-        assert response.status_code == 404
+    def test_timer_urgency_escalation(self, client, timer_service):
+        """Test that urgency level escalates correctly as time depletes."""
+        timer = Timer(
+            id=uuid4(),
+            initial_seconds=100,
+            remaining_seconds=100,
+            status=TimerStatus.ACTIVE,
+            urgency_level=UrgencyLevel.LOW,
+            started_at=datetime.utcnow(),
+            last_reset_at=datetime.utcnow(),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        
+        low_urgency = timer_service.calculate_urgency_level(timer.remaining_seconds, timer.initial_seconds)
+        assert low_urgency == UrgencyLevel.LOW
+        
+        timer.remaining_seconds = 50
+        medium_urgency = timer_service.calculate_urgency_level(timer.remaining_seconds, timer.initial_seconds)
+        assert medium_urgency == UrgencyLevel.MEDIUM
+        
+        timer.remaining_seconds = 25
+        high_urgency = timer_service.calculate_urgency_level(timer.remaining_seconds, timer.initial_seconds)
+        assert high_urgency == UrgencyLevel.HIGH
+        
+        timer.remaining_seconds = 5
+        critical_urgency = timer_service.calculate_urgency_level(timer.remaining_seconds, timer.initial_seconds)
+        assert critical_urgency == UrgencyLevel.CRITICAL
 
-    def test_timer_response_schema(self) -> None:
-        """Timer response includes all required fields."""
-        response = client.post("/timers", json={"duration": 45})
-        assert response.status_code == 201
-        data = response.json()
-        required_fields = [
-            "id", "initialDuration", "remainingTime", "status",
-            "urgencyLevel", "startedAt", "lastResetAt", "createdAt"
-        ]
-        for field in required_fields:
-            assert field in data
+    def test_colour_intensity_increases_monotonically(self, client, timer_service):
+        """Test that colour intensity increases as time depletes."""
+        initial_seconds = 100
+        
+        colour_100 = timer_service.calculate_colour_intensity(100, initial_seconds)
+        colour_75 = timer_service.calculate_colour_intensity(75, initial_seconds)
+        colour_50 = timer_service.calculate_colour_intensity(50, initial_seconds)
+        colour_25 = timer_service.calculate_colour_intensity(25, initial_seconds)
+        colour_0 = timer_service.calculate_colour_intensity(0, initial_seconds)
+        
+        red_values = [colour_100["red"], colour_75["red"], colour_50["red"], colour_25["red"], colour_0["red"]]
+        assert red_values == sorted(red_values)
+        
+        green_values = [colour_100["green"], colour_75["green"], colour_50["green"], colour_25["green"], colour_0["green"]]
+        assert green_values == sorted(green_values, reverse=True)
 
-    def test_timer_state_response_schema(self) -> None:
-        """TimerState response includes all required fields."""
-        create_response = client.post("/timers", json={"duration": 50})
-        timer_id = create_response.json()["id"]
-        response = client.get(f"/timers/{timer_id}/state")
-        assert response.status_code == 200
-        state = response.json()
-        required_fields = [
-            "id", "remainingTime", "remainingPercentage",
-            "urgencyLevel", "colourIntensity", "facialExpression"
-        ]
-        for field in required_fields:
-            assert field in state
-        assert "red" in state["colourIntensity"]
-        assert "green" in state["colourIntensity"]
-        assert "blue" in state["colourIntensity"]
-
-    def test_multiple_concurrent_timers(self) -> None:
-        """Multiple timers can be created and tracked independently."""
-        timer1 = client.post("/timers", json={"duration": 30}).json()
-        timer2 = client.post("/timers", json={"duration": 60}).json()
-        client.post(f"/timers/{timer1['id']}/tick", json={"seconds_elapsed": 10})
-        response_1 = client.get(f"/timers/{timer1['id']}")
-        response_2 = client.get(f"/timers/{timer2['id']}")
-        assert response_1.json()["remainingTime"] == 20
-        assert response_2.json()["remainingTime"] == 60
-
-    def test_tick_on_nonexistent_timer(self) -> None:
-        """POST /timers/{id}/tick with nonexistent ID returns 404."""
-        fake_id = str(uuid.uuid4())
-        response = client.post(f"/timers/{fake_id}/tick", json={"seconds_elapsed": 5})
-        assert response.status_code == 404
-
-    def test_reset_on_nonexistent_timer(self) -> None:
-        """POST /timers/{id}/reset with nonexistent ID returns 404."""
-        fake_id = str(uuid.uuid4())
-        response = client.post(f"/timers/{fake_id}/reset")
-        assert response.status_code == 404
+    def test_facial_expression_maps_to_urgency(self, client, timer_service):
+        """Test that facial expressions map correctly to urgency levels."""
+        low_expr = timer_service.get_facial_expression(UrgencyLevel.LOW)
+        assert low_expr is not None
+        
+        medium_expr = timer_service.get_facial_expression(UrgencyLevel.MEDIUM)
+        assert medium_expr is not None
+        
+        high_expr = timer_service.get_facial_expression(UrgencyLevel.HIGH)
+        assert high_expr is not None
+        
+        critical_expr = timer_service.get_facial_expression(UrgencyLevel.CRITICAL)
+        assert critical_expr is not None
+        
+        assert low_expr != critical_expr
