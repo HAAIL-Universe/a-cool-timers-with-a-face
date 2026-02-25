@@ -1,0 +1,143 @@
+/* Global styles: retro arcade aesthetic */
+
+:root {
+  /* Arcade color palette by urgency */
+  --color-low: #4ade80;
+  --color-medium: #facc15;
+  --color-high: #f97316;
+  --color-critical: #dc2626;
+
+  /* Arcade font stack */
+  --font-arcade: 'Courier New', 'Courier', monospace;
+  --pixel-size: 16px;
+
+  /* Base spacing & sizing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 2rem;
+  --spacing-xl: 4rem;
+
+  /* Typography */
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.5rem;
+  --font-size-xl: 2rem;
+  --font-size-2xl: 3rem;
+
+  /* Timing */
+  --transition-fast: 100ms;
+  --transition-normal: 200ms;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background-color: #1a1a1a;
+  color: #fff;
+  font-family: var(--font-arcade);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+#root {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: var(--spacing-md);
+}
+
+/* Pixelated rendering for retro look */
+img {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Arcade button styling */
+.arcade-btn {
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-family: var(--font-arcade);
+  font-size: var(--font-size-base);
+  font-weight: bold;
+  color: #000;
+  background-color: #facc15;
+  border: 3px solid #1a1a1a;
+  border-radius: 0;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all var(--transition-fast) ease;
+  user-select: none;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5);
+}
+
+.arcade-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.5);
+  background-color: #fde047;
+}
+
+.arcade-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+.arcade-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Urgency level background classes */
+.urgency-low {
+  background-color: var(--color-low);
+  transition: background-color var(--transition-normal) ease;
+}
+
+.urgency-medium {
+  background-color: var(--color-medium);
+  transition: background-color var(--transition-normal) ease;
+}
+
+.urgency-high {
+  background-color: var(--color-high);
+  transition: background-color var(--transition-normal) ease;
+}
+
+.urgency-critical {
+  background-color: var(--color-critical);
+  animation: pulse-critical 0.5s infinite alternate;
+}
+
+@keyframes pulse-critical {
+  from {
+    background-color: var(--color-critical);
+  }
+  to {
+    background-color: #991b1b;
+  }
+}
+
+/* Responsive typography */
+@media (max-width: 640px) {
+  :root {
+    --font-size-base: 0.875rem;
+    --font-size-2xl: 2rem;
+    --spacing-lg: 1.5rem;
+  }
+}
