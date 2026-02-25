@@ -1,0 +1,142 @@
+/* Arcade CSS Foundation — 8-bit pixel-perfect rendering */
+
+/* Font stack: monospace for arcade authenticity */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P:wght@400&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  font-size: 16px;
+  line-height: 1.5;
+  background-color: #1a1a1a;
+  color: #00ff00;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+button {
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  font-size: 12px;
+  padding: 8px 16px;
+  border: 2px solid #00ff00;
+  background-color: #000;
+  color: #00ff00;
+  cursor: pointer;
+  transition: background-color 0.1s, color 0.1s;
+}
+
+button:hover {
+  background-color: #00ff00;
+  color: #000;
+}
+
+button:active {
+  transform: scale(0.95);
+}
+
+/* Urgency state background colors */
+.urgency-calm {
+  background-color: #00aa00;
+}
+
+.urgency-concerned {
+  background-color: #ffff00;
+}
+
+.urgency-stressed {
+  background-color: #ff8800;
+}
+
+.urgency-critical {
+  background-color: #ff0000;
+}
+
+/* Text contrast for different backgrounds */
+.urgency-calm, .urgency-concerned {
+  color: #000;
+}
+
+.urgency-stressed, .urgency-critical {
+  color: #fff;
+}
+
+/* No antialiasing for pixel-perfect rendering */
+text {
+  text-rendering: optimizeSpeed;
+}
+
+/* Input styling */
+input {
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  font-size: 14px;
+  padding: 6px 12px;
+  border: 2px solid #00ff00;
+  background-color: #000;
+  color: #00ff00;
+}
+
+input:focus {
+  outline: none;
+  border-color: #ffff00;
+  box-shadow: 0 0 8px #ffff00;
+}
+
+/* Disable default browser styling for better arcade feel */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #00ff00;
+  border: 2px solid #1a1a1a;
+}
+
+/* CRT scanline effect (optional, subtle) */
+@keyframes scanlines {
+  0% { text-shadow: 0 0 0 rgba(255, 255, 255, 0.03); }
+  50% { text-shadow: 0 0 2px rgba(255, 255, 255, 0.05); }
+  100% { text-shadow: 0 0 0 rgba(255, 255, 255, 0.03); }
+}
+
+body {
+  animation: scanlines 0.15s infinite;
+}
+
+/* Utility classes */
+.arcade-text {
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.hidden {
+  display: none;
+}
