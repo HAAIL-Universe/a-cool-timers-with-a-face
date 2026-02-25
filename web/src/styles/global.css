@@ -1,0 +1,203 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+:root {
+  --color-urgency-low: #00FF00;
+  --color-urgency-medium: #FFFF00;
+  --color-urgency-high: #FF8800;
+  --color-urgency-critical: #FF0000;
+  
+  --color-bg-safe: #1a1a2e;
+  --color-bg-caution: #2e2a1a;
+  --color-bg-urgent: #2e1a1a;
+  --color-bg-critical: #1a0000;
+  
+  --color-text-primary: #FFFFFF;
+  --color-text-dark: #000000;
+  
+  --color-btn-primary: #00FF00;
+  --color-btn-primary-hover: #00DD00;
+  --color-btn-primary-active: #00AA00;
+  --color-btn-danger: #FF0000;
+  --color-btn-danger-hover: #DD0000;
+  --color-btn-danger-active: #AA0000;
+  
+  --font-arcade: 'JetBrains Mono', 'Courier New', monospace;
+  --font-size-display: 72px;
+  --font-size-button: 18px;
+  
+  --transition-color: 500ms ease-in-out;
+  --transition-fast: 200ms ease-in-out;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-arcade);
+  background-color: var(--color-bg-safe);
+  color: var(--color-text-primary);
+  line-height: 1;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.timer-display {
+  font-family: var(--font-arcade);
+  font-size: var(--font-size-display);
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-align: center;
+  color: var(--color-text-primary);
+  line-height: 1;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.timer-face {
+  width: 256px;
+  height: 256px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.arcade-btn {
+  font-family: var(--font-arcade);
+  font-size: var(--font-size-button);
+  font-weight: 700;
+  padding: 16px 32px;
+  border: 4px solid currentColor;
+  background-color: transparent;
+  color: var(--color-btn-primary);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  transition: all var(--transition-fast);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.5);
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.arcade-btn:hover:not(:disabled) {
+  background-color: var(--color-btn-primary);
+  color: var(--color-text-dark);
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.5);
+  transform: translateY(-2px);
+}
+
+.arcade-btn:active:not(:disabled) {
+  background-color: var(--color-btn-primary-active);
+  color: var(--color-text-dark);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+  transform: translateY(2px);
+}
+
+.arcade-btn:disabled {
+  color: #666666;
+  border-color: #666666;
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.arcade-btn--primary {
+  color: var(--color-btn-primary);
+  border-color: var(--color-btn-primary);
+}
+
+.arcade-btn--primary:hover:not(:disabled) {
+  background-color: var(--color-btn-primary);
+  color: var(--color-text-dark);
+}
+
+.arcade-btn--primary:active:not(:disabled) {
+  background-color: var(--color-btn-primary-active);
+}
+
+.arcade-btn--danger {
+  color: var(--color-btn-danger);
+  border-color: var(--color-btn-danger);
+}
+
+.arcade-btn--danger:hover:not(:disabled) {
+  background-color: var(--color-btn-danger);
+  color: var(--color-text-dark);
+}
+
+.arcade-btn--danger:active:not(:disabled) {
+  background-color: var(--color-btn-danger-active);
+}
+
+@media (max-width: 768px) {
+  :root {
+    --font-size-display: 48px;
+    --font-size-button: 16px;
+  }
+  
+  .arcade-btn {
+    padding: 12px 24px;
+  }
+  
+  .timer-face {
+    width: 192px;
+    height: 192px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --font-size-display: 36px;
+    --font-size-button: 14px;
+  }
+  
+  .arcade-btn {
+    padding: 10px 20px;
+  }
+  
+  .timer-face {
+    width: 128px;
+    height: 128px;
+  }
+}
+
+@keyframes pulse-critical {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.pulse-critical {
+  animation: pulse-critical 0.5s ease-in-out infinite;
+}
+
+@keyframes pulse-urgent {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.pulse-urgent {
+  animation: pulse-urgent 1s ease-in-out infinite;
+}
