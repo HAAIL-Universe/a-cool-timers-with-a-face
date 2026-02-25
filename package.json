@@ -1,0 +1,23 @@
+{
+  "name": "8daecf19-f22d-457c-951c-8447e78585a5",
+  "version": "1.0.0",
+  "description": "> A retro 8-bit fitness countdown timer featuring colour-coded urgency feedback and expressive pixel-art facial reactions — powered by FastAPI and React/Vite.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HAAIL-Universe/a-cool-timers-with-a-face.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/HAAIL-Universe/a-cool-timers-with-a-face/issues"
+  },
+  "homepage": "https://github.com/HAAIL-Universe/a-cool-timers-with-a-face#readme"
+}
