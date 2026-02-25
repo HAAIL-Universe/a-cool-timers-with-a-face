@@ -1,52 +1,43 @@
-from datetime import datetime
-from typing import Optional
-from uuid import uuid4
+from typing import Dict, Optional
+from uuid import UUID
 
 from app.models.timer import Timer, TimerStatus, UrgencyLevel
 
 
 class TimerRepository:
-    """In-memory store for Timer objects."""
+    """In-memory timer repository for session-based state management."""
 
     def __init__(self) -> None:
-        self._timers: dict[str, Timer] = {}
+        """Initialize in-memory timer store."""
+        self._timers: Dict[UUID, Timer] = {}
 
-    def create(self, initial_seconds: int) -> Timer:
+    def create(self, timer: Timer) -> Timer:
         """Create and store a new timer."""
-        now = datetime.utcnow()
-        timer = Timer(
-            id=str(uuid4()),
-            initial_seconds=initial_seconds,
-            remaining_seconds=initial_seconds,
-            status=TimerStatus.active,
-            urgency_level=UrgencyLevel.low,
-            started_at=now,
-            last_reset_at=now,
-            created_at=now,
-        )
         self._timers[timer.id] = timer
         return timer
 
-    def get(self, timer_id: str) -> Optional[Timer]:
-        """Retrieve a timer by ID."""
+    def get_by_id(self, timer_id: UUID) -> Optional[Timer]:
+        """Retrieve timer by ID."""
         return self._timers.get(timer_id)
 
-    def update(self, timer: Timer) -> Timer:
+    def update(self, timer_id: UUID, timer: Timer) -> Optional[Timer]:
         """Update an existing timer."""
-        self._timers[timer.id] = timer
-        return timer
+        if timer_id in self._timers:
+            self._timers[timer_id] = timer
+            return timer
+        return None
 
-    def delete(self, timer_id: str) -> bool:
-        """Delete a timer by ID; return True if deleted, False if not found."""
+    def delete(self, timer_id: UUID) -> bool:
+        """Delete a timer by ID."""
         if timer_id in self._timers:
             del self._timers[timer_id]
             return True
         return False
 
     def list_all(self) -> list[Timer]:
-        """Return all stored timers."""
+        """Retrieve all timers."""
         return list(self._timers.values())
 
     def clear(self) -> None:
-        """Clear all timers (for testing)."""
+        """Clear all timers from session store."""
         self._timers.clear()

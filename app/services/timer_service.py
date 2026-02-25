@@ -1,147 +1,101 @@
-from datetime import datetime, timedelta
-from app.models.timer import (
-    Timer,
-    TimerState,
-    TimerStatus,
-    UrgencyLevel,
-    FacialExpression,
-    ColourIntensity,
-    TimerCreateRequest,
-)
+from datetime import datetime
+from uuid import UUID
 
-
-class TimerRepo:
-    """In-memory repository for Timer objects."""
-    
-    def __init__(self):
-        self._timers: dict[str, Timer] = {}
-    
-    def create(self, timer: Timer) -> Timer:
-        """Create a new timer."""
-        self._timers[timer.id] = timer
-        return timer
-    
-    def get(self, timer_id: str) -> Timer | None:
-        """Fetch a timer by ID."""
-        return self._timers.get(timer_id)
-    
-    def list_all(self) -> list[Timer]:
-        """Fetch all timers."""
-        return list(self._timers.values())
-    
-    def update(self, timer: Timer) -> Timer:
-        """Update a timer."""
-        self._timers[timer.id] = timer
-        return timer
-    
-    def delete(self, timer_id: str) -> None:
-        """Delete a timer."""
-        if timer_id in self._timers:
-            del self._timers[timer_id]
+from app.models.timer import Timer, TimerCreate, TimerResponse, TimerStatus, UrgencyLevel
+from app.repos.timer_repo import TimerRepository
 
 
 class TimerService:
-    """Manages timer lifecycle, urgency calculation, and state mapping."""
+    """Service layer for timer operations and urgency state management."""
 
-    def __init__(self, repo: TimerRepo):
+    def __init__(self, repo: TimerRepository) -> None:
+        """Initialize TimerService with repository."""
         self.repo = repo
 
-    def create_timer(self, duration: int) -> Timer:
-        """Create a new timer with given duration in seconds."""
-        now = datetime.utcnow()
+    def create_timer(self, timer_create: TimerCreate) -> Timer:
+        """Create a new timer with initial countdown."""
         timer = Timer(
-            id=self._generate_id(),
-            initial_seconds=duration,
-            remaining_seconds=duration,
+            initial_seconds=timer_create.initial_seconds,
+            remaining_seconds=timer_create.initial_seconds,
             status=TimerStatus.active,
-            urgency_level=UrgencyLevel.low,
-            started_at=now,
-            last_reset_at=now,
-            created_at=now,
+            urgency_level=self._calculate_urgency(timer_create.initial_seconds, timer_create.initial_seconds),
         )
         return self.repo.create(timer)
 
-    def get_timer(self, timer_id: str) -> Timer:
-        """Fetch a timer by ID."""
-        timer = self.repo.get(timer_id)
+    def get_timer(self, timer_id: UUID) -> Timer | None:
+        """Retrieve timer by ID."""
+        return self.repo.get_by_id(timer_id)
+
+    def start_timer(self, timer_id: UUID) -> Timer | None:
+        """Start a paused timer."""
+        timer = self.repo.get_by_id(timer_id)
         if not timer:
-            raise ValueError(f"Timer {timer_id} not found")
-        return timer
-
-    def list_timers(self) -> list[Timer]:
-        """Fetch all timers."""
-        return self.repo.list_all()
-
-    def reset_timer(self, timer_id: str) -> Timer:
-        """Reset timer to initial duration."""
-        timer = self.get_timer(timer_id)
-        timer.remaining_seconds = timer.initial_seconds
-        timer.last_reset_at = datetime.utcnow()
+            return None
         timer.status = TimerStatus.active
-        return self.repo.update(timer)
+        timer.updated_at = datetime.utcnow()
+        return self.repo.update(timer_id, timer)
 
-    def delete_timer(self, timer_id: str) -> None:
-        """Delete a timer."""
-        self.repo.delete(timer_id)
+    def stop_timer(self, timer_id: UUID) -> Timer | None:
+        """Pause an active timer."""
+        timer = self.repo.get_by_id(timer_id)
+        if not timer:
+            return None
+        timer.status = TimerStatus.paused
+        timer.updated_at = datetime.utcnow()
+        return self.repo.update(timer_id, timer)
 
-    def get_timer_state(self, timer_id: str) -> TimerState:
-        """Compute full timer state including urgency, colour, and expression."""
-        timer = self.get_timer(timer_id)
-        remaining = self._compute_remaining_seconds(timer)
-        remaining_pct = (remaining / timer.initial_seconds) * 100
-        urgency = self._calculate_urgency(remaining_pct)
-        colour = self._calculate_colour(urgency)
-        expression = self._calculate_expression(urgency)
+    def reset_timer(self, timer_id: UUID) -> Timer | None:
+        """Reset timer to initial duration."""
+        timer = self.repo.get_by_id(timer_id)
+        if not timer:
+            return None
+        timer.remaining_seconds = timer.initial_seconds
+        timer.status = TimerStatus.active
+        timer.urgency_level = self._calculate_urgency(timer.initial_seconds, timer.initial_seconds)
+        timer.last_reset_at = datetime.utcnow()
+        timer.updated_at = datetime.utcnow()
+        return self.repo.update(timer_id, timer)
 
-        return TimerState(
-            id=timer.id,
-            remaining_time=remaining,
-            remaining_percentage=remaining_pct,
-            urgency_level=urgency,
-            colour_intensity=colour,
-            facial_expression=expression,
-        )
+    def tick_timer(self, timer_id: UUID) -> Timer | None:
+        """Decrement timer by 1 second and update urgency."""
+        timer = self.repo.get_by_id(timer_id)
+        if not timer or timer.status != TimerStatus.active:
+            return None
+        
+        if timer.remaining_seconds > 0:
+            timer.remaining_seconds -= 1
+        
+        if timer.remaining_seconds <= 0:
+            timer.status = TimerStatus.expired
+            timer.remaining_seconds = 0
+        
+        timer.urgency_level = self._calculate_urgency(timer.initial_seconds, timer.remaining_seconds)
+        timer.updated_at = datetime.utcnow()
+        return self.repo.update(timer_id, timer)
 
-    def _calculate_urgency(self, remaining_pct: float) -> UrgencyLevel:
-        """Map remaining percentage to urgency level."""
-        if remaining_pct > 50:
+    def _calculate_urgency(self, initial_seconds: int, remaining_seconds: int) -> UrgencyLevel:
+        """Calculate urgency level based on remaining time percentage."""
+        if remaining_seconds <= 0:
+            return UrgencyLevel.critical
+        
+        if initial_seconds == 0:
             return UrgencyLevel.low
-        elif remaining_pct >= 25:
+        
+        percentage = remaining_seconds / initial_seconds
+        
+        if percentage > 0.5:
+            return UrgencyLevel.low
+        elif percentage > 0.25:
             return UrgencyLevel.medium
-        elif remaining_pct >= 10:
+        elif percentage > 0.1:
             return UrgencyLevel.high
         else:
             return UrgencyLevel.critical
 
-    def _calculate_colour(self, urgency: UrgencyLevel) -> ColourIntensity:
-        """Map urgency level to RGB colour."""
-        if urgency == UrgencyLevel.low:
-            return ColourIntensity(red=0, green=255, blue=0)
-        elif urgency == UrgencyLevel.medium:
-            return ColourIntensity(red=255, green=255, blue=0)
-        elif urgency == UrgencyLevel.high:
-            return ColourIntensity(red=255, green=165, blue=0)
-        else:  # critical
-            return ColourIntensity(red=255, green=0, blue=0)
+    def list_all_timers(self) -> list[Timer]:
+        """Retrieve all active timers."""
+        return self.repo.list_all()
 
-    def _calculate_expression(self, urgency: UrgencyLevel) -> FacialExpression:
-        """Map urgency level to facial expression."""
-        if urgency == UrgencyLevel.low:
-            return FacialExpression.calm
-        elif urgency == UrgencyLevel.medium:
-            return FacialExpression.concerned
-        elif urgency == UrgencyLevel.high:
-            return FacialExpression.stressed
-        else:  # critical
-            return FacialExpression.critical
-
-    def _compute_remaining_seconds(self, timer: Timer) -> int:
-        """Compute actual remaining time based on elapsed time since start."""
-        elapsed = (datetime.utcnow() - timer.started_at).total_seconds()
-        remaining = max(0, timer.initial_seconds - int(elapsed))
-        return remaining
-
-    def _generate_id(self) -> str:
-        """Generate a unique timer ID."""
-        import uuid
-        return str(uuid.uuid4())
+    def delete_timer(self, timer_id: UUID) -> bool:
+        """Delete a timer session."""
+        return self.repo.delete(timer_id)

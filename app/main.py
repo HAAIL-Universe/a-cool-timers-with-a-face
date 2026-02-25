@@ -1,14 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.config import get_settings
 
-app = FastAPI(
-    title="A cool timers with a Face",
-    description="Timer API with countdown functionality and urgency feedback",
-    version="1.0.0",
-)
+from app.config import get_settings
+from app.repos.timer_repo import TimerRepository
+from app.services.timer_service import TimerService
+from app.routers import timers as timers_router
 
 settings = get_settings()
+
+app = FastAPI(title="A cool timers with a Face")
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,14 +18,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+timer_repo = TimerRepository()
+timer_service = TimerService(repo=timer_repo)
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {"status": "ok"}
+timers_router.timer_service = timer_service
 
-
-@app.get("/")
-async def root():
-    """Root endpoint."""
-    return {"message": "A cool timers with a Face API"}
+app.include_router(timers_router.router)
