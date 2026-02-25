@@ -1,0 +1,784 @@
+{
+  "stack": {
+    "auth": null,
+    "database": "postgresql",
+    "frontend": "react",
+    "test_framework": "pytest",
+    "llm_integration": null,
+    "backend_language": "python",
+    "backend_framework": "fastapi"
+  },
+  "phases": [
+    {
+      "name": "Backend Foundation",
+      "number": 0,
+      "purpose": "Establish FastAPI project structure, database models, Alembic migrations, repositories, service layer, and all API endpoints defined in the physics contract.",
+      "exemptions": [],
+      "file_manifest": [
+        {
+          "path": "requirements.txt",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Python dependencies: fastapi, uvicorn, sqlalchemy, asyncpg, alembic, pydantic, python-dotenv, pytest, httpx"
+        },
+        {
+          "path": ".env.example",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Example env vars: DATABASE_URL, CORS_ORIGINS"
+        },
+        {
+          "path": "app/__init__.py",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Python package marker"
+        },
+        {
+          "path": "app/config.py",
+          "layer": "config",
+          "action": "create",
+          "exports": [
+            "class Settings(BaseSettings): database_url: str, cors_origins: list[str]",
+            "def get_settings() -> Settings"
+          ],
+          "depends_on": [],
+          "description": "Settings loaded from environment using pydantic BaseSettings"
+        },
+        {
+          "path": "app/database.py",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "engine: AsyncEngine",
+            "AsyncSessionLocal: async_sessionmaker",
+            "Base: DeclarativeBase",
+            "async def get_db() -> AsyncGenerator[AsyncSession, None]"
+          ],
+          "depends_on": [
+            "app/config.py"
+          ],
+          "description": "SQLAlchemy async engine, session factory, and Base declarative class"
+        },
+        {
+          "path": "app/models/__init__.py",
+          "layer": "model",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker"
+        },
+        {
+          "path": "app/models/timer.py",
+          "layer": "model",
+          "action": "create",
+          "exports": [
+            "class Timer(Base): id: UUID, name: str, duration_seconds: int, remaining_seconds: int, started_at: datetime|None, paused_at: datetime|None, reset_count: int, status: str, created_at: datetime, updated_at: datetime",
+            "class TimerEvent(Base): id: UUID, timer_id: UUID, event_type: str, urgency_level: int, recorded_at: datetime"
+          ],
+          "depends_on": [
+            "app/database.py"
+          ],
+          "description": "SQLAlchemy ORM models for timer and timer_event tables per schema contract"
+        },
+        {
+          "path": "alembic.ini",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Alembic configuration pointing to alembic/ directory and DATABASE_URL"
+        },
+        {
+          "path": "alembic/env.py",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [],
+          "depends_on": [
+            "app/database.py",
+            "app/models/timer.py"
+          ],
+          "description": "Alembic env.py wired to SQLAlchemy Base metadata and DATABASE_URL"
+        },
+        {
+          "path": "alembic/versions/0001_initial_schema.py",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [],
+          "depends_on": [
+            "alembic/env.py"
+          ],
+          "description": "Initial migration creating timer and timer_event tables with indexes from schema contract"
+        },
+        {
+          "path": "app/schemas/__init__.py",
+          "layer": "model",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker"
+        },
+        {
+          "path": "app/schemas/timer.py",
+          "layer": "model",
+          "action": "create",
+          "exports": [
+            "class TimerState(BaseModel): countdown: int, duration: int, is_paused: bool, is_expired: bool, urgency_level: str, colour_intensity: float, last_reset_at: str|None",
+            "class TimerConfig(BaseModel): duration: int",
+            "class UrgencyState(BaseModel): urgency_level: str, colour_intensity: float, remaining_percent: float, facial_expression: str"
+          ],
+          "depends_on": [],
+          "description": "Pydantic request/response schemas matching physics contract definitions"
+        },
+        {
+          "path": "app/repos/__init__.py",
+          "layer": "repo",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker"
+        },
+        {
+          "path": "app/repos/timer_repo.py",
+          "layer": "repo",
+          "action": "create",
+          "exports": [
+            "class TimerRepo.__init__(self, db: AsyncSession)",
+            "async def TimerRepo.get_active_timer(self) -> Timer | None",
+            "async def TimerRepo.create_timer(self, duration_seconds: int) -> Timer",
+            "async def TimerRepo.update_timer(self, timer: Timer) -> Timer",
+            "async def TimerRepo.log_event(self, timer_id: UUID, event_type: str, urgency_level: int) -> TimerEvent"
+          ],
+          "depends_on": [
+            "app/models/timer.py",
+            "app/database.py"
+          ],
+          "description": "Database CRUD operations for timer and timer_event tables"
+        },
+        {
+          "path": "app/services/__init__.py",
+          "layer": "service",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker"
+        },
+        {
+          "path": "app/services/timer_service.py",
+          "layer": "service",
+          "action": "create",
+          "exports": [
+            "class TimerService.__init__(self, repo: TimerRepo)",
+            "async def TimerService.get_state(self) -> TimerState",
+            "async def TimerService.configure(self, config: TimerConfig) -> TimerState",
+            "async def TimerService.reset(self) -> TimerState",
+            "async def TimerService.pause(self) -> TimerState",
+            "async def TimerService.resume(self) -> TimerState",
+            "async def TimerService.get_urgency(self) -> UrgencyState",
+            "def TimerService._calc_urgency(remaining: int, duration: int) -> tuple[str, float]: returns (urgency_level, colour_intensity)",
+            "def TimerService._calc_remaining(timer: Timer) -> int: computes live remaining_seconds accounting for elapsed wall-clock time"
+          ],
+          "depends_on": [
+            "app/repos/timer_repo.py",
+            "app/schemas/timer.py",
+            "app/models/timer.py"
+          ],
+          "description": "Timer state machine: countdown logic, urgency calculation, reset/pause/resume transitions"
+        },
+        {
+          "path": "app/routers/__init__.py",
+          "layer": "router",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker"
+        },
+        {
+          "path": "app/routers/timer.py",
+          "layer": "router",
+          "action": "create",
+          "exports": [
+            "router prefix: /api",
+            "GET /api/timer -> TimerState",
+            "POST /api/timer (body: TimerConfig) -> TimerState",
+            "POST /api/timer/reset -> TimerState (400 if expired)",
+            "POST /api/timer/pause -> TimerState",
+            "POST /api/timer/resume -> TimerState",
+            "GET /api/urgency -> UrgencyState"
+          ],
+          "depends_on": [
+            "app/services/timer_service.py",
+            "app/schemas/timer.py",
+            "app/repos/timer_repo.py",
+            "app/database.py"
+          ],
+          "description": "FastAPI router implementing all /api/timer and /api/urgency endpoints from physics contract"
+        },
+        {
+          "path": "app/main.py",
+          "layer": "entrypoint",
+          "action": "create",
+          "exports": [
+            "app: FastAPI \u2014 mounts router at /api with CORS from CORS_ORIGINS setting"
+          ],
+          "depends_on": [
+            "app/routers/timer.py",
+            "app/config.py",
+            "app/database.py"
+          ],
+          "description": "FastAPI app creation, CORS middleware, router mounting, and lifespan startup"
+        },
+        {
+          "path": "tests/__init__.py",
+          "layer": "test",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker"
+        },
+        {
+          "path": "tests/conftest.py",
+          "layer": "test",
+          "action": "create",
+          "exports": [
+            "fixture client: TestClient",
+            "fixture db_session: AsyncSession"
+          ],
+          "depends_on": [
+            "app/main.py",
+            "app/database.py"
+          ],
+          "description": "Pytest fixtures: in-memory SQLite async engine, test client, overridden get_db dependency"
+        },
+        {
+          "path": "tests/test_timer_service.py",
+          "layer": "test",
+          "action": "create",
+          "exports": [],
+          "depends_on": [
+            "app/services/timer_service.py",
+            "tests/conftest.py"
+          ],
+          "description": "Unit tests for TimerService state machine: configure, reset, pause, resume, urgency calc"
+        },
+        {
+          "path": "tests/test_timer_router.py",
+          "layer": "test",
+          "action": "create",
+          "exports": [],
+          "depends_on": [
+            "app/main.py",
+            "tests/conftest.py"
+          ],
+          "description": "Integration tests for all 6 physics contract endpoints via TestClient"
+        }
+      ],
+      "wires_from_phase": null,
+      "acceptance_criteria": [
+        {
+          "id": "AC-0-1",
+          "test_hint": "manual: uvicorn app.main:app --reload",
+          "description": "uvicorn app.main:app --reload starts without errors"
+        },
+        {
+          "id": "AC-0-2",
+          "test_hint": "tests/test_timer_router.py::test_get_timer_state",
+          "description": "GET /api/timer returns a valid TimerState JSON with all required fields"
+        },
+        {
+          "id": "AC-0-3",
+          "test_hint": "tests/test_timer_router.py::test_configure_timer",
+          "description": "POST /api/timer with {\"duration\": 60} configures timer and returns updated TimerState"
+        },
+        {
+          "id": "AC-0-4",
+          "test_hint": "tests/test_timer_router.py::test_reset_timer",
+          "description": "POST /api/timer/reset returns 200 when timer is running and 400 when expired"
+        },
+        {
+          "id": "AC-0-5",
+          "test_hint": "tests/test_timer_router.py::test_get_urgency",
+          "description": "GET /api/urgency returns UrgencyState with urgency_level, colour_intensity, remaining_percent, facial_expression"
+        },
+        {
+          "id": "AC-0-6",
+          "test_hint": "manual: alembic upgrade head",
+          "description": "Alembic migration runs cleanly: alembic upgrade head creates timer and timer_event tables with indexes"
+        },
+        {
+          "id": "AC-0-7",
+          "test_hint": "pytest -x",
+          "description": "pytest -x passes all backend tests"
+        }
+      ],
+      "schema_tables_claimed": [
+        "timer",
+        "timer_event"
+      ]
+    },
+    {
+      "name": "React Frontend Core",
+      "number": 1,
+      "purpose": "Scaffold the Vite + React TypeScript project with the timer hook, urgency/colour logic, 8-bit face pixel art component, and all UI controls wired to the backend API.",
+      "exemptions": [],
+      "file_manifest": [
+        {
+          "path": "web/package.json",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Vite + React + TypeScript project manifest with vitest and axios dependencies"
+        },
+        {
+          "path": "web/vite.config.ts",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Vite config with React plugin and proxy /api -> http://localhost:8000"
+        },
+        {
+          "path": "web/tsconfig.json",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "TypeScript strict config targeting ESNext"
+        },
+        {
+          "path": "web/index.html",
+          "layer": "entrypoint",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "HTML entry point loading Press Start 2P font from Google Fonts and mounting #root"
+        },
+        {
+          "path": "web/src/main.tsx",
+          "layer": "entrypoint",
+          "action": "create",
+          "exports": [],
+          "depends_on": [
+            "web/src/App.tsx"
+          ],
+          "description": "React DOM root render mounting App component"
+        },
+        {
+          "path": "web/src/types.ts",
+          "layer": "model",
+          "action": "create",
+          "exports": [
+            "interface TimerState { countdown: number; duration: number; is_paused: boolean; is_expired: boolean; urgency_level: 'calm' | 'anxious' | 'alarm'; colour_intensity: number; last_reset_at: string | null }",
+            "interface UrgencyState { urgency_level: 'calm' | 'anxious' | 'alarm'; colour_intensity: number; remaining_percent: number; facial_expression: 'calm' | 'anxious' | 'alarm' }",
+            "type FacialState = 'calm' | 'anxious' | 'alarm' | 'defeated'"
+          ],
+          "depends_on": [],
+          "description": "TypeScript interfaces matching backend Pydantic schemas from physics contract"
+        },
+        {
+          "path": "web/src/api.ts",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "async function getTimerState(): Promise<TimerState>",
+            "async function configureTimer(duration: number): Promise<TimerState>",
+            "async function resetTimer(): Promise<TimerState>",
+            "async function pauseTimer(): Promise<TimerState>",
+            "async function resumeTimer(): Promise<TimerState>",
+            "async function getUrgency(): Promise<UrgencyState>"
+          ],
+          "depends_on": [
+            "web/src/types.ts"
+          ],
+          "description": "Axios-based API client for all 6 backend endpoints"
+        },
+        {
+          "path": "web/src/hooks/useTimer.ts",
+          "layer": "service",
+          "action": "create",
+          "exports": [
+            "function useTimer(): { timerState: TimerState | null; urgencyState: UrgencyState | null; facialState: FacialState; configure: (duration: number) => Promise<void>; reset: () => Promise<void>; pause: () => Promise<void>; resume: () => Promise<void>; isLoading: boolean; error: string | null }"
+          ],
+          "depends_on": [
+            "web/src/api.ts",
+            "web/src/types.ts"
+          ],
+          "description": "Custom hook polling backend state every second, managing local countdown display and persisting duration to localStorage"
+        },
+        {
+          "path": "web/src/utils/colour.ts",
+          "layer": "service",
+          "action": "create",
+          "exports": [
+            "function intensityToColour(intensity: number): string \u2014 returns hex colour interpolated from #00FF00 (0.0) through #FFFF00 (0.5) to #FF0000 (1.0)",
+            "function intensityToBackground(intensity: number): string \u2014 returns CSS background style string"
+          ],
+          "depends_on": [],
+          "description": "Map colour_intensity (0.0-1.0) to CSS colour string and background gradient"
+        },
+        {
+          "path": "web/src/utils/format.ts",
+          "layer": "service",
+          "action": "create",
+          "exports": [
+            "function formatSeconds(seconds: number): string \u2014 returns zero-padded HH:MM:SS"
+          ],
+          "depends_on": [],
+          "description": "Format seconds integer to HH:MM:SS display string"
+        },
+        {
+          "path": "web/src/components/FaceComponent.tsx",
+          "layer": "router",
+          "action": "create",
+          "exports": [
+            "interface FaceComponentProps { facialState: FacialState; colourIntensity: number }",
+            "function FaceComponent(props: FaceComponentProps): JSX.Element \u2014 renders 16x16 pixel grid with calm/anxious/alarm/defeated sprite patterns"
+          ],
+          "depends_on": [
+            "web/src/types.ts",
+            "web/src/utils/colour.ts"
+          ],
+          "description": "8-bit pixel art face rendered as a CSS grid of coloured divs; expression changes with FacialState"
+        },
+        {
+          "path": "web/src/components/TimerDisplay.tsx",
+          "layer": "router",
+          "action": "create",
+          "exports": [
+            "interface TimerDisplayProps { countdown: number; colourIntensity: number; isExpired: boolean }",
+            "function TimerDisplay(props: TimerDisplayProps): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/types.ts",
+            "web/src/utils/colour.ts",
+            "web/src/utils/format.ts"
+          ],
+          "description": "Large HH:MM:SS countdown display styled with Press Start 2P and urgency colour"
+        },
+        {
+          "path": "web/src/components/ControlButtons.tsx",
+          "layer": "router",
+          "action": "create",
+          "exports": [
+            "interface ControlButtonsProps { isPaused: boolean; isExpired: boolean; onReset: () => void; onTogglePause: () => void; onOpenSettings: () => void }",
+            "function ControlButtons(props: ControlButtonsProps): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/types.ts"
+          ],
+          "description": "Arcade-style Start/Pause, Reset, and Settings buttons with pixel-art button styling"
+        },
+        {
+          "path": "web/src/components/SettingsPanel.tsx",
+          "layer": "router",
+          "action": "create",
+          "exports": [
+            "interface SettingsPanelProps { isOpen: boolean; onConfigure: (duration: number) => void; onClose: () => void }",
+            "function SettingsPanel(props: SettingsPanelProps): JSX.Element"
+          ],
+          "depends_on": [],
+          "description": "Overlay settings panel with preset duration buttons (30s, 60s, 90s, 120s) and close button"
+        },
+        {
+          "path": "web/src/App.tsx",
+          "layer": "entrypoint",
+          "action": "create",
+          "exports": [
+            "function App(): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/hooks/useTimer.ts",
+            "web/src/components/FaceComponent.tsx",
+            "web/src/components/TimerDisplay.tsx",
+            "web/src/components/ControlButtons.tsx",
+            "web/src/components/SettingsPanel.tsx",
+            "web/src/utils/colour.ts"
+          ],
+          "description": "Root component composing all UI pieces; wires useTimer hook to FaceComponent, TimerDisplay, ControlButtons, SettingsPanel with urgency background"
+        },
+        {
+          "path": "web/src/App.css",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Global CSS: dark navy background (#0A0E27), Press Start 2P font, image-rendering: pixelated, arcade button styles"
+        },
+        {
+          "path": "web/src/tests/useTimer.test.ts",
+          "layer": "test",
+          "action": "create",
+          "exports": [],
+          "depends_on": [
+            "web/src/hooks/useTimer.ts"
+          ],
+          "description": "Vitest unit tests for useTimer hook: polling, state updates, localStorage persistence"
+        },
+        {
+          "path": "web/src/tests/colour.test.ts",
+          "layer": "test",
+          "action": "create",
+          "exports": [],
+          "depends_on": [
+            "web/src/utils/colour.ts"
+          ],
+          "description": "Vitest unit tests for intensityToColour mapping at 0.0, 0.5, and 1.0 boundaries"
+        }
+      ],
+      "wires_from_phase": 0,
+      "acceptance_criteria": [
+        {
+          "id": "AC-1-1",
+          "test_hint": "manual: cd web && npm run dev",
+          "description": "npm run dev in web/ starts the Vite dev server without errors"
+        },
+        {
+          "id": "AC-1-2",
+          "test_hint": "manual: open browser at http://localhost:5173",
+          "description": "Main timer screen renders with 8-bit face, countdown display, and control buttons"
+        },
+        {
+          "id": "AC-1-3",
+          "test_hint": "manual flow: Start -> observe countdown decrement -> Pause -> observe freeze",
+          "description": "Pressing Start begins countdown; pressing Pause halts it; timer state updates every second"
+        },
+        {
+          "id": "AC-1-4",
+          "test_hint": "manual: let countdown run to <25% and observe background/text colour shift to red",
+          "description": "Colour shifts from green at high remaining time to red at low remaining time"
+        },
+        {
+          "id": "AC-1-5",
+          "test_hint": "manual: observe FaceComponent pixel pattern change at >50%, 25-50%, <25% remaining",
+          "description": "Face expression changes from calm to anxious to alarm as time depletes across urgency thresholds"
+        },
+        {
+          "id": "AC-1-6",
+          "test_hint": "manual: click Settings -> select 90s -> verify timer display shows 00:01:30",
+          "description": "Settings panel opens on Settings button click; preset buttons configure timer duration correctly"
+        },
+        {
+          "id": "AC-1-7",
+          "test_hint": "manual: set 90s, refresh page, verify duration is still 90s",
+          "description": "Selected duration persists in localStorage and reloads correctly after page refresh"
+        },
+        {
+          "id": "AC-1-8",
+          "test_hint": "cd web && npm test",
+          "description": "npm test in web/ passes all Vitest tests"
+        }
+      ],
+      "schema_tables_claimed": []
+    },
+    {
+      "name": "Integration, Expiry Flow & Polish",
+      "number": 2,
+      "purpose": "Complete the expiry/defeated face flow, wire end-to-end frontend-backend integration, and add README with local dev setup instructions.",
+      "exemptions": [],
+      "file_manifest": [
+        {
+          "path": "web/src/hooks/useTimer.ts",
+          "layer": "service",
+          "action": "modify",
+          "exports": [
+            "function useTimer(): { timerState: TimerState | null; urgencyState: UrgencyState | null; facialState: FacialState; configure: (duration: number) => Promise<void>; reset: () => Promise<void>; pause: () => Promise<void>; resume: () => Promise<void>; isLoading: boolean; error: string | null }"
+          ],
+          "depends_on": [
+            "web/src/api.ts",
+            "web/src/types.ts"
+          ],
+          "description": "Refine expired state detection: switch facialState to 'defeated', stop active polling interval on expiry, re-enable on reset"
+        },
+        {
+          "path": "web/src/components/FaceComponent.tsx",
+          "layer": "router",
+          "action": "modify",
+          "exports": [
+            "interface FaceComponentProps { facialState: FacialState; colourIntensity: number }",
+            "function FaceComponent(props: FaceComponentProps): JSX.Element \u2014 all four sprite states including defeated X-eyes"
+          ],
+          "depends_on": [
+            "web/src/types.ts",
+            "web/src/utils/colour.ts"
+          ],
+          "description": "Add defeated pixel sprite pattern (X-eyes, downturned mouth) for expired timer state"
+        },
+        {
+          "path": "web/src/App.tsx",
+          "layer": "entrypoint",
+          "action": "modify",
+          "exports": [
+            "function App(): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/hooks/useTimer.ts",
+            "web/src/components/FaceComponent.tsx",
+            "web/src/components/TimerDisplay.tsx",
+            "web/src/components/ControlButtons.tsx",
+            "web/src/components/SettingsPanel.tsx",
+            "web/src/utils/colour.ts"
+          ],
+          "description": "Show muted grey background on expired state and display RESET TO CONTINUE overlay message when is_expired is true"
+        },
+        {
+          "path": "tests/test_timer_service.py",
+          "layer": "test",
+          "action": "modify",
+          "exports": [],
+          "depends_on": [
+            "app/services/timer_service.py",
+            "tests/conftest.py"
+          ],
+          "description": "Add expiry boundary tests: reset returns 400 when status=expired, resume returns correct state after pause"
+        },
+        {
+          "path": "web/src/tests/FaceComponent.test.tsx",
+          "layer": "test",
+          "action": "create",
+          "exports": [],
+          "depends_on": [
+            "web/src/components/FaceComponent.tsx"
+          ],
+          "description": "Vitest + React Testing Library tests: verify correct pixel pattern class renders per FacialState prop"
+        },
+        {
+          "path": "README.md",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Local dev setup: env var setup, alembic upgrade head, uvicorn start command, npm install + npm run dev, project overview"
+        }
+      ],
+      "wires_from_phase": 1,
+      "acceptance_criteria": [
+        {
+          "id": "AC-2-1",
+          "test_hint": "manual: set 10s timer, let expire without pressing Reset, observe defeated face and grey background",
+          "description": "When timer countdown reaches 0, face switches to defeated expression and background turns grey/muted"
+        },
+        {
+          "id": "AC-2-2",
+          "test_hint": "tests/test_timer_service.py::test_reset_when_expired",
+          "description": "POST /api/timer/reset returns 400 with error detail when timer status is expired"
+        },
+        {
+          "id": "AC-2-3",
+          "test_hint": "manual: let timer expire and observe overlay message on screen",
+          "description": "RESET TO CONTINUE overlay appears on the UI when is_expired is true"
+        },
+        {
+          "id": "AC-2-4",
+          "test_hint": "manual: let expire -> open Settings -> pick 60s -> verify green countdown restart",
+          "description": "Pressing Reset after expiry clears expired state, restores full duration, and restarts countdown with green colour"
+        },
+        {
+          "id": "AC-2-5",
+          "test_hint": "manual: run uvicorn + npm run dev, complete full workout cadence cycle in browser",
+          "description": "Full end-to-end flow works with both servers running: no CORS errors, all API calls succeed"
+        },
+        {
+          "id": "AC-2-6",
+          "test_hint": "pytest -x",
+          "description": "pytest -x passes all backend tests including new expiry boundary tests"
+        },
+        {
+          "id": "AC-2-7",
+          "test_hint": "cd web && npm test",
+          "description": "npm test passes all frontend Vitest tests including FaceComponent tests"
+        },
+        {
+          "id": "AC-2-8",
+          "test_hint": "manual: follow README on fresh clone",
+          "description": "README.md contains correct runnable local dev setup instructions verified from a clean clone"
+        }
+      ],
+      "schema_tables_claimed": []
+    }
+  ],
+  "summary": {
+    "mode": "greenfield",
+    "one_liner": "A retro 8-bit fitness countdown timer with urgency-driven colour and facial expression feedback via a FastAPI backend and React frontend.",
+    "key_constraints": [
+      "Mini-build: NO auth, JWT, sessions, or user management of any kind",
+      "No Docker files \u2014 dev-ready local build only (uvicorn + npm run dev)",
+      "Timer expiry does NOT auto-reset \u2014 user action required",
+      "Routers must not import repos directly \u2014 service layer is mandatory",
+      "Services must not import FastAPI Request/Response \u2014 HTTP-unaware",
+      "All 6 physics endpoints must be implemented: GET /api/timer, POST /api/timer, POST /api/timer/reset, POST /api/timer/pause, POST /api/timer/resume, GET /api/urgency",
+      "Schema tables claimed: timer (Phase 0), timer_event (Phase 0)",
+      "Frontend uses React hooks only for state \u2014 no external state manager",
+      "8-bit face renders via CSS grid pixel art \u2014 Press Start 2P font"
+    ],
+    "stack_rationale": "FastAPI provides lightweight, async-capable REST endpoints for timer state management with minimal overhead. React + Vite delivers a responsive, hook-driven UI suited for real-time countdown updates and CSS pixel-art rendering. PostgreSQL persists timer state and event logs as required by the schema contract.",
+    "missing_contracts": [],
+    "existing_contracts": [
+      "blueprint",
+      "stack",
+      "schema",
+      "manifesto",
+      "physics",
+      "boundaries",
+      "ui"
+    ],
+    "boot_script_required": false
+  },
+  "metadata": {
+    "generated_at": "2026-02-25T18:38:39.738761+00:00",
+    "project_name": "cool-timers-with-a-face",
+    "planner_model": "claude-sonnet-4-6",
+    "schema_version": "1.0"
+  },
+  "contract_refs": [
+    {
+      "note": "All endpoints implemented in app/routers/timer.py; response shapes match TimerState and UrgencyState schemas exactly",
+      "section": "paths \u2014 all 6 endpoints",
+      "contract": "physics"
+    },
+    {
+      "note": "Both tables claimed in Phase 0; ORM models in app/models/timer.py; Alembic migration in alembic/versions/0001_initial_schema.py",
+      "section": "Tables: timer, timer_event",
+      "contract": "schema"
+    },
+    {
+      "note": "Routers depend on services only; services depend on repos only; enforced by depends_on graph throughout",
+      "section": "Layer rules: routers must not import repos; services must not import FastAPI",
+      "contract": "boundaries"
+    },
+    {
+      "note": "All 6 core components implemented; Press Start 2P font; colour palette green->yellow->red mapped via intensityToColour utility",
+      "section": "\u00a73 Component List and \u00a74 Visual Style",
+      "contract": "ui"
+    },
+    {
+      "note": "Defeated face state, grey background, and RESET TO CONTINUE overlay completed in Phase 2",
+      "section": "\u00a75 Flow 2: Missed Reset (Timer Expiry)",
+      "contract": "ui"
+    },
+    {
+      "note": "Service layer enforces 400 on reset when expired; frontend requires explicit action to restart",
+      "section": "Core Invariants \u2014 expiry does not auto-reset",
+      "contract": "blueprint"
+    },
+    {
+      "note": "_calc_remaining uses wall-clock elapsed time against started_at to compute live remaining seconds server-side without a background task",
+      "section": "Technical Simplicity \u2014 stateless countdown in FastAPI",
+      "contract": "manifesto"
+    }
+  ],
+  "required_contracts": [
+    "blueprint",
+    "stack",
+    "schema",
+    "manifesto",
+    "physics",
+    "boundaries",
+    "ui"
+  ]
+}
