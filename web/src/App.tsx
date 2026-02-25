@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TimerContainer } from './components/TimerContainer';
+import TimerContainer from './components/TimerContainer';
 import type { TimerState } from './types/timer';
 
 interface Timer {
@@ -27,7 +27,15 @@ function useTimer() {
         status: 'running',
       };
       setTimer(newTimer);
-      setTimerState({ elapsed: 0, duration, status: 'running' });
+      setTimerState({
+        id: newTimer.id,
+        duration_seconds: duration,
+        elapsed_seconds: 0,
+        is_running: true,
+        urgency_level: 'low',
+        created_at: new Date().toISOString(),
+        last_reset_at: new Date().toISOString(),
+      });
       setIsRunning(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create timer');
@@ -50,57 +58,55 @@ function useTimer() {
     }
   };
 
+  const startPause = async () => {
+    if (isRunning) {
+      setIsRunning(false);
+    } else if (timer) {
+      setIsRunning(true);
+    }
+  };
+
   return {
     timer,
     timerState,
     isRunning,
     createAndStart,
     reset,
+    startPause,
     isLoading,
     error,
   };
 }
 
 export function App(): JSX.Element {
-  const [duration, setDuration] = useState<number>(30);
-  const [inputValue, setInputValue] = useState<string>('30');
+  const [selectedDuration, setSelectedDuration] = useState<number>(30);
   const {
     timer,
     timerState,
     isRunning,
     createAndStart,
     reset,
+    startPause,
     isLoading,
     error,
   } = useTimer();
 
-  const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setInputValue(value);
-    const parsed = parseInt(value, 10);
-    if (!isNaN(parsed) && parsed > 0) {
-      setDuration(parsed);
+  const handleDurationSelect = (duration: number) => {
+    if (!isRunning) {
+      setSelectedDuration(duration);
     }
   };
 
   const handleStartPause = async () => {
-    if (isRunning) {
-      // Pause logic (if implemented in backend)
-      return;
-    }
     if (!timer) {
-      // Create and start a new timer
-      await createAndStart(duration);
-    } else if (timer.status === 'paused') {
-      // Resume existing paused timer (optional)
-      await createAndStart(duration);
+      await createAndStart(selectedDuration);
+    } else {
+      await startPause();
     }
   };
 
   const handleReset = async () => {
     await reset();
-    setDuration(30);
-    setInputValue('30');
   };
 
   return (
@@ -116,29 +122,14 @@ export function App(): JSX.Element {
           </div>
         )}
 
-        {!timer ? (
-          <div className="duration-setup">
-            <label htmlFor="duration-input">Set Timer Duration (seconds):</label>
-            <input
-              id="duration-input"
-              type="number"
-              value={inputValue}
-              onChange={handleDurationChange}
-              min="1"
-              disabled={isLoading}
-              placeholder="30"
-            />
-            <p className="duration-hint">Duration: {duration}s</p>
-          </div>
-        ) : null}
-
         <TimerContainer
           timerState={timerState}
           isRunning={isRunning}
           onReset={handleReset}
           onStartPause={handleStartPause}
+          onDurationSelect={handleDurationSelect}
+          selectedDuration={selectedDuration}
           isLoading={isLoading}
-          duration={duration}
         />
       </main>
 

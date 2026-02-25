@@ -1,5 +1,6 @@
 import React from 'react';
 import { UrgencyLevel } from '../types/timer';
+import '../animations.css';
 
 interface FacialAvatarProps {
   urgencyLevel: UrgencyLevel;
@@ -110,28 +111,23 @@ const FacialAvatar: React.FC<FacialAvatarProps> = ({ urgencyLevel, isPulsing = f
 
   const expression = getExpressionData(urgencyLevel);
 
-  const pulseOpacity = isPulsing && urgencyLevel === 'critical' ? 1 : 0;
-  const animationStyle = isPulsing && urgencyLevel === 'critical'
-    ? { animation: 'pulse 0.5s ease-in-out infinite' }
-    : {};
+  const containerClasses = [
+    isPulsing && urgencyLevel === 'critical' ? 'pulse-critical' : 'face-transition',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div
+      className={containerClasses}
       style={{
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: '2rem',
         position: 'relative',
-        ...animationStyle,
       }}
     >
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-      `}</style>
       <svg
         width={canvasSize}
         height={canvasSize}
